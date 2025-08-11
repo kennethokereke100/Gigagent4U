@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated, Easing,
@@ -81,6 +82,7 @@ function FloatingInput(props: {
 }
 
 export default function RegisterScreen() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const isTall = height > 700;
@@ -167,7 +169,7 @@ export default function RegisterScreen() {
         <Animated.View pointerEvents="box-none" style={[styles.ctaWrap, { paddingBottom: bottomOffset }]}>
           <Pressable
             disabled={!canSubmit}
-            onPress={() => {}}
+            onPress={() => router.push('/screen/questions')}
             style={({ pressed }) => [
               styles.cta,
               !canSubmit && styles.ctaDisabled,
