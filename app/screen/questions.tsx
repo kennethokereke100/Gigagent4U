@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BottomPicker from '../../components/BottomPicker';
 import BottomSheetQuestion from '../../components/BottomSheetQuestion';
+import { useUserRole } from '../../contexts/UserRoleContext';
 
 const BG = '#F5F3F0';
 const OTHER = 'Other';
@@ -64,6 +65,7 @@ export default function QuestionsScreen() {
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const isTall = height > 700;
+  const { setRole: setUserRole } = useUserRole();
 
   const [role, setRole] = useState<'Talent' | 'Promoter' | null>(null);
   const [categories, setCategories] = useState<string[]>([]);
@@ -280,7 +282,12 @@ export default function QuestionsScreen() {
 
             <Pressable
               disabled={!canContinue}
-              onPress={() => router.push('/screen/locationsearch')}
+              onPress={() => {
+                if (role) {
+                  setUserRole(role.toLowerCase() as 'talent' | 'promoter');
+                }
+                router.push('/screen/locationsearch');
+              }}
               style={({ pressed }) => [
                 styles.cta,
                 !canContinue && styles.ctaDisabled,

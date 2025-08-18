@@ -37,6 +37,19 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "94478a8e-6845-49e4-8940-0ca044fd56f7"
+      }
+    },
+    "owner": "kennethokereke00",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/94478a8e-6845-49e4-8940-0ca044fd56f7"
     }
   }
 }

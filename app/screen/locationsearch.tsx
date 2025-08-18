@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -10,21 +10,22 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { PickLocationSheet } from './picklocation';
+import PickLocationSheet from '../../components/PickLocationSheet';
+import { useUserRole } from '../../contexts/UserRoleContext';
 
 const BG = '#F5F3F0';
 
 export default function LocationSearch() {
-  const { role } = useLocalSearchParams<{ role?: 'Talent' | 'Promoter' }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { role } = useUserRole();
   const [loading, setLoading] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [chosenCity, setChosenCity] = useState<string | null>(null);
 
   const title = useMemo(() => {
-    if (role === 'Talent') return "Where will you be performing?";
-    if (role === 'Promoter') return "Where are you promoting?";
+    if (role === 'talent') return "Where will you be performing?";
+    if (role === 'promoter') return "Where are you promoting?";
     return "Where are we going?";
   }, [role]);
 
@@ -94,13 +95,12 @@ export default function LocationSearch() {
       <PickLocationSheet
         visible={pickerOpen}
         onClose={() => setPickerOpen(false)}
-        onDone={(city) => {
-          if (city) {
-            setChosenCity(city);
+        onDone={(picked) => {
+          if (picked) {
+            setChosenCity(picked.name);
             setPickerOpen(false);
-            // Pass only the city portion before the comma
-            const cityOnly = city.split(',')[0].trim();
-            goToConfirm(cityOnly);
+            // Pass only the city name
+            goToConfirm(picked.name);
           } else {
             setPickerOpen(false);
           }

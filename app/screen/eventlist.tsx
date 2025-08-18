@@ -1,19 +1,32 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useMemo, useState } from 'react';
+import { useLocalSearchParams } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import BooksScreen from './gigagent/books';
+import { useUserRole } from '../../contexts/UserRoleContext';
 import GigScreen from './gigagent/gig';
+import Groups from './gigagent/groups';
 import NotificationsScreen from './gigagent/notifications';
 import ProfileScreen from './gigagent/profile';
-import Groups from './groups';
 
 const BG = '#F5F3F0';
-type TabKey = 'gigs' | 'groups' | 'books' | 'notifications' | 'profile';
+type TabKey = 'gigs' | 'groups' | 'notifications' | 'profile';
 
 export default function EventList() {
   const insets = useSafeAreaInsets();
+  const { role } = useUserRole();
   const [tab, setTab] = useState<TabKey>('gigs');
+  
+  // Get URL parameters to set initial tab
+  const { activeTab } = useLocalSearchParams<{ activeTab?: TabKey }>();
+  
+  // Set the active tab based on URL parameter
+  useEffect(() => {
+    if (activeTab && ['gigs', 'groups', 'notifications', 'profile'].includes(activeTab)) {
+      setTab(activeTab as TabKey);
+    }
+  }, [activeTab]);
 
   // Compute a single nav height we can reuse everywhere
   const NAV_BASE = 60; // room for icon + label
@@ -21,13 +34,23 @@ export default function EventList() {
 
   const renderScreen = () => {
     switch (tab) {
-      case 'gigs': return <GigScreen />;
+      case 'gigs': 
+        return <GigScreen />;
       case 'groups': return <Groups />;
-      case 'books': return <BooksScreen />;
       case 'notifications': return <NotificationsScreen />;
       case 'profile': return <ProfileScreen />;
       default: return null;
     }
+  };
+
+  // Determine which tabs should be visible based on role
+  const getVisibleTabs = (): TabKey[] => {
+    if (role === 'promoter') {
+      // Promoters see gigs (for managing events), notifications, and profile
+      return ['gigs', 'notifications', 'profile'];
+    }
+    // Default: show all tabs for talent and other roles
+    return ['gigs', 'groups', 'notifications', 'profile'];
   };
 
   const NavItem = ({
@@ -46,8 +69,9 @@ export default function EventList() {
 
   return (
     <View style={styles.container}>
-      {/* Give the content room so it won't be covered by the absolute nav */}
-      <View style={{ flex: 1, paddingBottom: navHeight }}>{renderScreen()}</View>
+      <StatusBar style="dark" backgroundColor="transparent" translucent />
+      {/* Content container with no top padding to ensure status bar overlap */}
+      <View style={styles.contentContainer}>{renderScreen()}</View>
 
       <View
         style={[
@@ -58,18 +82,32 @@ export default function EventList() {
           },
         ]}
       >
-        <NavItem k="gigs" icon={['home', 'home-outline']} label="Gigs" />
-        <NavItem k="groups" icon={['people', 'people-outline']} label="Groups" />
-        <NavItem k="books" icon={['cash', 'cash-outline']} label="Books" />
-        <NavItem k="notifications" icon={['notifications', 'notifications-outline']} label="Notifications" />
-        <NavItem k="profile" icon={['person', 'person-outline']} label="Profile" />
+        {getVisibleTabs().includes('gigs') && (
+          <NavItem k="gigs" icon={['home', 'home-outline']} label="Gigs" />
+        )}
+        {getVisibleTabs().includes('groups') && (
+          <NavItem k="groups" icon={['people', 'people-outline']} label="Groups" />
+        )}
+        {getVisibleTabs().includes('notifications') && (
+          <NavItem k="notifications" icon={['notifications', 'notifications-outline']} label="Notifications" />
+        )}
+        {getVisibleTabs().includes('profile') && (
+          <NavItem k="profile" icon={['person', 'person-outline']} label="Profile" />
+        )}
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BG },
+  container: { 
+    flex: 1, 
+    backgroundColor: BG 
+  },
+  contentContainer: {
+    flex: 1,
+    paddingBottom: 76, // Fixed height for nav bar to avoid layout shifts
+  },
   navBar: {
     position: 'absolute',
     bottom: 0, left: 0, right: 0,

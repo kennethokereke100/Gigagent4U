@@ -7,7 +7,11 @@ export default function DebugSheet() {
   return (
     <View style={{ flex: 1, justifyContent: 'center', padding: 24 }}>
       <Button title="Open sheet" onPress={() => ref.current?.present()} />
-      <BottomSheetModal ref={ref} snapPoints={['50%', '90%']} />
+      <BottomSheetModal ref={ref} snapPoints={['50%', '90%']}>
+        <View style={{ flex: 1, padding: 24 }}>
+          <Button title="Close" onPress={() => ref.current?.dismiss()} />
+        </View>
+      </BottomSheetModal>
     </View>
   );
 }

@@ -1,5 +1,5 @@
-import { Redirect } from "expo-router";
+import WelcomeScreen from './screen/index';
 
 export default function Entry() {
-  return <Redirect href="/screen" />; // goes to app/screen/index.tsx
+  return <WelcomeScreen />;
 }
