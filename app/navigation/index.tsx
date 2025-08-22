@@ -6,6 +6,9 @@ import React from 'react';
 
 // Screens
 import Gig from '../screen/gigagent/gig'; // Main gig screen
+import Groups from '../screen/gigagent/groups'; // Groups screen
+import Notifications from '../screen/gigagent/notifications'; // Notifications screen
+import Profile from '../screen/gigagent/profile'; // Profile screen
 import Message from '../screen/message'; // Chat thread
 import PrivateMessages from '../screen/privatemessages'; // Inbox
 
@@ -76,8 +79,48 @@ export default function RootNav() {
             ),
           }}
         />
-        {/* add your other tabs here */}
-        {/* <Tab.Screen name="GroupsTab" component={GroupsNavigator} /> */}
+        <Tab.Screen 
+          name="GroupsTab" 
+          component={Groups}
+          options={{
+            title: 'Groups',
+            tabBarIcon: ({ color, focused }) => (
+              <Ionicons 
+                name={focused ? 'people' : 'people-outline'} 
+                size={28} 
+                color={color} 
+              />
+            ),
+          }}
+        />
+        <Tab.Screen 
+          name="NotificationsTab" 
+          component={Notifications}
+          options={{
+            title: 'Notifications',
+            tabBarIcon: ({ color, focused }) => (
+              <Ionicons 
+                name={focused ? 'notifications' : 'notifications-outline'} 
+                size={28} 
+                color={color} 
+              />
+            ),
+          }}
+        />
+        <Tab.Screen 
+          name="ProfileTab" 
+          component={Profile}
+          options={{
+            title: 'Profile',
+            tabBarIcon: ({ color, focused }) => (
+              <Ionicons 
+                name={focused ? 'person' : 'person-outline'} 
+                size={28} 
+                color={color} 
+              />
+            ),
+          }}
+        />
       </Tab.Navigator>
     </NavigationContainer>
   );

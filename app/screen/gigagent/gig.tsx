@@ -7,8 +7,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
   Image,
+  Modal,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View
@@ -18,7 +18,8 @@ import FilterBottomSheet from '../../../components/FilterBottomSheet';
 import PickLocationSheet from '../../../components/PickLocationSheet';
 import PillarChip from '../../../components/PillarChip';
 import { useUserRole } from '../../../contexts/UserRoleContext';
-import GigPrepPanel from '../../components/GigPrepPanel';
+import CreateEvent from '../../components/CreateEvent';
+import GoalsSection from '../../components/GoalsSection';
 
 const Tab = createMaterialTopTabNavigator();
 
@@ -63,6 +64,35 @@ type EventItem = {
 
 type City = { id: string; name: string; region?: string };
 
+// Shared utility function to parse date strings like "Jan 5th", "Dec 15th"
+const parseEventDate = (dateStr: string): Date => {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  
+  // Map month abbreviations to numbers
+  const monthMap: { [key: string]: number } = {
+    'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
+    'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
+  };
+  
+  // Extract month and day from "Jan 5th" format
+  const parts = dateStr.split(' ');
+  const month = monthMap[parts[0]];
+  const day = parseInt(parts[1].replace(/\D/g, '')); // Remove "th", "st", "nd", "rd"
+  
+  // Create date object - assume current year unless it's a past month
+  let year = currentYear;
+  const eventDate = new Date(year, month, day);
+  
+  // If the event date is in the future but the month is in the past, it's from last year
+  if (eventDate > now && month < now.getMonth()) {
+    year = currentYear - 1;
+    return new Date(year, month, day);
+  }
+  
+  return eventDate;
+};
+
 const MOCK_EVENTS: EventItem[] = [
   { id: '1', title: 'Looking for new wrestlers', date: 'July 24th', time: '6:00 – 8:00 PM EDT', venue: 'El Rio', priceFrom: '$17.85', miles: 4.5, pillar: 'Wrestlers', postedAt: '2025-01-10T16:20:00Z', distanceMi: 4.5, startsAt: '2025-07-24T18:00:00Z', endsAt: '2025-07-24T20:00:00Z', applied: true },
   { id: '2', title: 'Looking for new wrestlers', date: 'July 24th', time: '6:00 – 8:00 PM EDT', venue: 'Main Room', priceFrom: '$12.00', miles: 2.1, pillar: 'Comedians', postedAt: '2025-01-10T10:30:00Z', distanceMi: 2.1, startsAt: '2025-07-24T19:00:00Z', endsAt: '2025-07-24T22:00:00Z', invited: true },
@@ -73,6 +103,10 @@ const MOCK_EVENTS: EventItem[] = [
   // Past events
   { id: '7', title: 'Wrestling match last week', date: 'Jan 5th', time: '7:00 – 9:00 PM EDT', venue: 'Old Arena', priceFrom: '$15.00', miles: 5.2, pillar: 'Wrestlers', postedAt: '2024-12-20T10:00:00Z', distanceMi: 5.2, startsAt: '2025-01-05T19:00:00Z', endsAt: '2025-01-05T21:00:00Z', applied: true },
   { id: '8', title: 'Comedy show last month', date: 'Dec 15th', time: '8:00 – 10:00 PM EDT', venue: 'Comedy Club', priceFrom: '$10.00', miles: 3.1, pillar: 'Comedians', postedAt: '2024-11-25T14:00:00Z', distanceMi: 3.1, startsAt: '2024-12-15T20:00:00Z', endsAt: '2024-12-15T22:00:00Z', applied: true },
+  { id: '9', title: 'Boxing championship event', date: 'Dec 10th', time: '6:00 – 9:00 PM EDT', venue: 'Sports Complex', priceFrom: '$45.00', miles: 8.7, pillar: 'Boxers', postedAt: '2024-11-15T09:00:00Z', distanceMi: 8.7, startsAt: '2024-12-10T18:00:00Z', endsAt: '2024-12-10T21:00:00Z' },
+  { id: '10', title: 'Ring announcer needed', date: 'Nov 28th', time: '7:00 – 8:30 PM EDT', venue: 'Local Gym', priceFrom: '$18.00', miles: 2.3, pillar: 'Ring Announcers', postedAt: '2024-11-10T16:30:00Z', distanceMi: 2.3, startsAt: '2024-11-28T19:00:00Z', endsAt: '2024-11-28T20:30:00Z' },
+  { id: '11', title: 'Comedy open mic night', date: 'Nov 20th', time: '8:00 – 11:00 PM EDT', venue: 'Laugh Factory', priceFrom: '$12.00', miles: 6.1, pillar: 'Comedians', postedAt: '2024-11-05T12:00:00Z', distanceMi: 6.1, startsAt: '2024-11-20T20:00:00Z', endsAt: '2024-11-20T23:00:00Z' },
+  { id: '12', title: 'Wrestling training session', date: 'Nov 15th', time: '5:00 – 7:00 PM EDT', venue: 'Training Center', priceFrom: '$22.00', miles: 4.8, pillar: 'Wrestlers', postedAt: '2024-10-30T14:00:00Z', distanceMi: 4.8, startsAt: '2024-11-15T17:00:00Z', endsAt: '2024-11-15T19:00:00Z' },
 ];
 
 const DEFAULT_FILTERS: Filters = {
@@ -179,9 +213,39 @@ const UpcomingTab: React.FC = () => {
     );
   };
 
-  const upcomingEvents = MOCK_EVENTS.filter(event => {
+  // Helper function to parse date strings like "Jan 5th", "Dec 15th"
+  const parseEventDate = (dateStr: string): Date => {
     const now = new Date();
-    return new Date(event.endsAt) >= now;
+    const currentYear = now.getFullYear();
+    
+    // Map month abbreviations to numbers
+    const monthMap: { [key: string]: number } = {
+      'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
+      'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
+    };
+    
+    // Extract month and day from "Jan 5th" format
+    const parts = dateStr.split(' ');
+    const month = monthMap[parts[0]];
+    const day = parseInt(parts[1].replace(/\D/g, '')); // Remove "th", "st", "nd", "rd"
+    
+    // Create date object - assume current year unless it's a past month
+    let year = currentYear;
+    const eventDate = new Date(year, month, day);
+    
+    // If the event date is in the future but the month is in the past, it's from last year
+    if (eventDate > now && month < now.getMonth()) {
+      year = currentYear - 1;
+      return new Date(year, month, day);
+    }
+    
+    return eventDate;
+  };
+
+  const upcomingEvents = MOCK_EVENTS.filter(event => {
+    const eventDate = parseEventDate(event.date);
+    const now = new Date();
+    return eventDate >= now;
   });
 
   return (
@@ -192,6 +256,7 @@ const UpcomingTab: React.FC = () => {
       ItemSeparatorComponent={() => <View style={{ height: 14 }} />}
       contentContainerStyle={{ padding: 16, paddingTop: 8 }}
       showsVerticalScrollIndicator={false}
+      style={{ flex: 1 }}
       ListEmptyComponent={() => (
         <View style={styles.emptyState}>
           <Ionicons name="search-outline" size={48} color="#9CA3AF" />
@@ -206,9 +271,39 @@ const UpcomingTab: React.FC = () => {
 };
 
 const PastTab: React.FC = () => {
-  const pastEvents = MOCK_EVENTS.filter(event => {
+  // Helper function to parse date strings like "Jan 5th", "Dec 15th"
+  const parseEventDate = (dateStr: string): Date => {
     const now = new Date();
-    return new Date(event.endsAt) < now && !!event.applied;
+    const currentYear = now.getFullYear();
+    
+    // Map month abbreviations to numbers
+    const monthMap: { [key: string]: number } = {
+      'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
+      'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
+    };
+    
+    // Extract month and day from "Jan 5th" format
+    const parts = dateStr.split(' ');
+    const month = monthMap[parts[0]];
+    const day = parseInt(parts[1].replace(/\D/g, '')); // Remove "th", "st", "nd", "rd"
+    
+    // Create date object - assume current year unless it's a past month
+    let year = currentYear;
+    const eventDate = new Date(year, month, day);
+    
+    // If the event date is in the future but the month is in the past, it's from last year
+    if (eventDate > now && month < now.getMonth()) {
+      year = currentYear - 1;
+      return new Date(year, month, day);
+    }
+    
+    return eventDate;
+  };
+
+  const pastEvents = MOCK_EVENTS.filter(event => {
+    const eventDate = parseEventDate(event.date);
+    const now = new Date();
+    return eventDate < now && !!event.applied;
   });
 
   return (
@@ -229,6 +324,7 @@ const PastTab: React.FC = () => {
       ItemSeparatorComponent={() => <View style={{ height: 14 }} />}
       contentContainerStyle={{ padding: 16, paddingTop: 8 }}
       showsVerticalScrollIndicator={false}
+      style={{ flex: 1 }}
       ListEmptyComponent={() => (
         <View style={styles.emptyState}>
           <Ionicons name="search-outline" size={48} color="#9CA3AF" />
@@ -263,6 +359,7 @@ const InvitesTab: React.FC = () => {
       ItemSeparatorComponent={() => <View style={{ height: 14 }} />}
       contentContainerStyle={{ padding: 16, paddingTop: 8 }}
       showsVerticalScrollIndicator={false}
+      style={{ flex: 1 }}
       ListEmptyComponent={() => (
         <View style={styles.emptyState}>
           <Ionicons name="search-outline" size={48} color="#9CA3AF" />
@@ -277,7 +374,7 @@ const InvitesTab: React.FC = () => {
 };
 
 const MyEventsTab: React.FC = () => (
-  <View style={styles.emptyState}>
+  <View style={styles.myEventsEmptyState}>
     <Ionicons name="calendar-outline" size={48} color="#9CA3AF" />
     <Text style={styles.emptyStateTitle}>No events yet</Text>
     <Text style={styles.emptyStateSubtitle}>
@@ -296,6 +393,115 @@ const CandidatesTab: React.FC = () => (
   </View>
 );
 
+const PastEventsTab: React.FC = () => {
+  const router = useRouter();
+  
+  // Helper function to parse date strings like "Jan 5th", "Dec 15th"
+  const parseEventDate = (dateStr: string): Date => {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    
+    // Map month abbreviations to numbers
+    const monthMap: { [key: string]: number } = {
+      'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
+      'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
+    };
+    
+    // Extract month and day from "Jan 5th" format
+    const parts = dateStr.split(' ');
+    const month = monthMap[parts[0]];
+    const day = parseInt(parts[1].replace(/\D/g, '')); // Remove "th", "st", "nd", "rd"
+    
+    // Create date object - assume current year unless it's a past month
+    let year = currentYear;
+    const eventDate = new Date(year, month, day);
+    
+    // If the event date is in the future but the month is in the past, it's from last year
+    if (eventDate > now && month < now.getMonth()) {
+      year = currentYear - 1;
+      return new Date(year, month, day);
+    }
+    
+    return eventDate;
+  };
+  
+  // Always show mock past events (IDs 7-12) for dummy data visibility
+  const pastEvents = MOCK_EVENTS.filter(event => {
+    const isPastEvent = ['7', '8', '9', '10', '11', '12'].includes(event.id);
+    console.log(`Event ${event.id}: ${event.title} - isPastEvent: ${isPastEvent}`);
+    return isPastEvent;
+  });
+  
+  console.log(`PastEventsTab: Found ${pastEvents.length} past events`);
+
+  const renderPastEvent = ({ item }: { item: EventItem }) => (
+    <Pressable 
+      style={styles.card} 
+      onPress={() => {
+        router.push({
+          pathname: '/screen/eventdetail',
+          params: {
+            title: item.title,
+            dateLine: `${item.date} • ${item.time}`,
+            venue: item.venue,
+            priceText: `Gig Price: ${item.priceFrom}`,
+            city: item.venue,
+          }
+        });
+      }}
+    >
+      {/* Event Image */}
+      <Image
+        source={{ uri: 'https://picsum.photos/seed/' + item.id + '/400/200' }}
+        style={styles.cardImage}
+        resizeMode="cover"
+      />
+      
+      {/* Category Pillar */}
+      <View style={styles.cardActions}>
+        <PillarChip label={item.pillar} />
+      </View>
+      
+      {/* Posted Badge */}
+      <View style={styles.postedBadge}>
+        <Text style={styles.postedText}>Posted</Text>
+      </View>
+      
+      {/* Event Details */}
+      <View style={{ padding: 16 }}>
+        <Text style={styles.cardTitle}>{item.title}</Text>
+        <Text style={styles.cardMeta}>
+          {item.date} {item.time} • {item.venue}
+        </Text>
+        <Text style={styles.cardMeta}>
+          {item.distanceMi.toFixed(1)} miles away
+        </Text>
+      </View>
+    </Pressable>
+  );
+
+  return (
+    <FlatList 
+      data={pastEvents}
+      keyExtractor={i => i.id}
+      renderItem={renderPastEvent}
+      ItemSeparatorComponent={() => <View style={{ height: 14 }} />}
+      contentContainerStyle={{ padding: 16, paddingTop: 8 }}
+      showsVerticalScrollIndicator={false}
+      style={{ flex: 1 }}
+      ListEmptyComponent={() => (
+        <View style={styles.emptyState}>
+          <Ionicons name="calendar-outline" size={48} color="#9CA3AF" />
+          <Text style={styles.emptyStateTitle}>No past events</Text>
+          <Text style={styles.emptyStateSubtitle}>
+            Your past events will appear here once they're completed.
+          </Text>
+        </View>
+      )}
+    />
+  );
+};
+
 export default function GigScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -310,6 +516,12 @@ export default function GigScreen() {
   
   // The draft filters while the sheet is open (drives live preview count & pill text "Filters active"):
   const [draft, setDraft] = useState<Filters>(DEFAULT_FILTERS);
+  
+  // Track if goals banner is dismissed
+  const [goalsBannerDismissed, setGoalsBannerDismissed] = useState(false);
+  
+  // FAB and modal state
+  const [createEventVisible, setCreateEventVisible] = useState(false);
   
   // Determine if user is a promoter
   const isPromoter = role === 'promoter';
@@ -333,6 +545,50 @@ export default function GigScreen() {
   const previewCount = useMemo(() => {
     return MOCK_EVENTS.length; // Simplified for now
   }, [draft]);
+
+  // Handle goal press
+  const handleGoalPress = (goalId: string) => {
+    console.log('Goal pressed:', goalId);
+    // TODO: Navigate to appropriate screen based on goalId
+  };
+
+  // Handle goals banner dismiss
+  const handleGoalsBannerDismiss = () => {
+    setGoalsBannerDismissed(true);
+  };
+
+  // Handle FAB and bottom sheet
+  const handleFABPress = () => {
+    setCreateEventVisible(true);
+  };
+
+  const handleCloseCreateEvent = () => {
+    setCreateEventVisible(false);
+  };
+
+  const handleCreateEvent = (eventData: any) => {
+    // Add the new event to MOCK_EVENTS
+    const newEvent = {
+      ...eventData,
+      id: Date.now().toString(),
+      postedAt: new Date().toISOString(),
+      pillar: 'Event',
+      priceFrom: '$0',
+      venue: eventData.location,
+      distanceMi: 0,
+      startsAt: new Date().toISOString(),
+      endsAt: new Date().toISOString(),
+    };
+    
+    // In a real app, you would save this to a database
+    // For now, we'll just close the modal
+    setCreateEventVisible(false);
+    
+    // You could also update the MOCK_EVENTS array here
+    // MOCK_EVENTS.unshift(newEvent);
+  };
+
+
 
   /** -------------------------
    * Sticky search header
@@ -389,57 +645,62 @@ export default function GigScreen() {
     </View>
   );
 
-  return (
+    return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" backgroundColor="transparent" translucent />
 
-      {/* Scroll only the search + prep */}
-      <ScrollView 
-        stickyHeaderIndices={[0]} 
-        contentContainerStyle={{ paddingBottom: 0 }} 
-        showsVerticalScrollIndicator={false}
-      >
+      {/* Sticky Header */}
+      <View style={styles.stickyHeader}>
         <StickySearchBar />
-        
-        <View style={styles.body}>
-          <View style={[styles.gigPrepContainer, { marginBottom: 0, paddingBottom: 0 }]}>
-            <GigPrepPanel
-              slides={[
-                { title: 'Profile updated', subtitle: 'Add more details from your profile page at any time.' },
-                { title: 'Add your skills', subtitle: 'Tell promoters what you do best to improve matches.' },
-                { title: 'Verify your email', subtitle: 'Keep your account secure and recoverable.' },
-                { title: 'Set your availability', subtitle: 'Let others know when you\'re open to new gigs.' },
-              ]}
-              completedCount={2}
-              totalCount={4}
-            />
-          </View>
-        </View>
-      </ScrollView>
+      </View>
 
-      {/* Tabs should be OUTSIDE scrollview */}
-      <Tab.Navigator
-        screenOptions={{
-          tabBarStyle: styles.tabBar,
-          tabBarLabelStyle: styles.tabLabel,
-          tabBarIndicatorStyle: styles.tabIndicator,
-          tabBarActiveTintColor: '#111',
-          tabBarInactiveTintColor: '#6B7280',
-        }}
-      >
-        {role === 'talent' ? (
-          <>
-            <Tab.Screen name="Upcoming" component={UpcomingTab} />
-            <Tab.Screen name="Past" component={PastTab} />
-            <Tab.Screen name="Invites" component={InvitesTab} />
-          </>
-        ) : (
-          <>
-            <Tab.Screen name="My Events" component={MyEventsTab} />
-            <Tab.Screen name="Candidates" component={CandidatesTab} />
-          </>
+      {/* Main content using FlatList to restore scrolling */}
+      <FlatList
+        data={[]} // Empty data since we're using ListHeaderComponent
+        keyExtractor={() => 'header'}
+        renderItem={() => null}
+        showsVerticalScrollIndicator={false}
+        style={styles.container}
+        contentContainerStyle={styles.scrollContent}
+        ListHeaderComponent={() => (
+          <View>
+            {/* Goals Section */}
+            {!goalsBannerDismissed && (
+              <GoalsSection 
+                onGoalPress={handleGoalPress} 
+                onDismiss={handleGoalsBannerDismiss}
+              />
+            )}
+
+            {/* Tab content area */}
+            <View style={styles.tabContentArea}>
+              <Tab.Navigator
+                screenOptions={{
+                  tabBarStyle: styles.tabBar,
+                  tabBarLabelStyle: styles.tabLabel,
+                  tabBarIndicatorStyle: styles.tabIndicator,
+                  tabBarActiveTintColor: '#111',
+                  tabBarInactiveTintColor: '#6B7280',
+                }}
+              >
+                {role === 'talent' ? (
+                  <>
+                    <Tab.Screen name="Upcoming" component={UpcomingTab} />
+                    <Tab.Screen name="Past" component={PastTab} />
+                    <Tab.Screen name="Invites" component={InvitesTab} />
+                  </>
+                ) : (
+                  <>
+                    <Tab.Screen name="My Events" component={MyEventsTab} />
+                    <Tab.Screen name="Candidates" component={CandidatesTab} />
+                    <Tab.Screen name="Past Events" component={PastEventsTab} />
+                  </>
+                )}
+              </Tab.Navigator>
+            </View>
+          </View>
         )}
-      </Tab.Navigator>
+      />
 
       <PickLocationSheet 
         visible={pickVisible}
@@ -470,6 +731,30 @@ export default function GigScreen() {
         }}
         onClose={() => setFilterOpen(false)}
       />
+
+      {/* FAB for promoters */}
+      {role === 'promoter' && (
+        <Pressable style={styles.fab} onPress={handleFABPress}>
+          <Ionicons name="add" size={24} color="#fff" />
+        </Pressable>
+      )}
+
+      {/* Create Event Full-Screen Modal */}
+      <Modal visible={createEventVisible} animationType="slide">
+        <View style={styles.fullScreenModal}>
+          {/* Header */}
+          <View style={[styles.modalHeader, { paddingTop: insets.top }]}>
+            <Pressable onPress={handleCloseCreateEvent} hitSlop={10}>
+              <Ionicons name="close" size={24} color="#111" />
+            </Pressable>
+            <Text style={styles.modalTitle}>Create Event</Text>
+            <View style={{ width: 24 }} />
+          </View>
+
+          {/* Content */}
+          <CreateEvent onPost={handleCreateEvent} />
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -482,11 +767,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: BG,
+    marginTop: 80, // Add margin to account for sticky header
   },
   stickyWrap: {
     backgroundColor: BG,
     paddingHorizontal: 16,
-    paddingBottom: 10,
+    paddingBottom: 0,
     // make sure it sits above scrolling content
     zIndex: 10,
     elevation: 6, // Android shadow
@@ -545,11 +831,32 @@ const styles = StyleSheet.create({
     color: '#111',
     fontWeight: '600',
   },
-  body: { paddingHorizontal: 16, paddingTop: 0, paddingBottom: 0, marginBottom: 0 },
-  gigPrepContainer: {
-    marginBottom: 0, // No spacing between GigPrepPanel and tabs
-    paddingBottom: 0, // Override GigPrepPanel's internal padding
+  stickyHeader: {
+    backgroundColor: BG,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
   },
+  scrollContent: {
+    paddingTop: 80, // Reduced spacing between header and content
+    paddingHorizontal: 0, // Remove horizontal padding to allow edge-to-edge GoalsSection
+  },
+  headerWrap: {
+    backgroundColor: BG,
+    paddingHorizontal: 16,
+    paddingBottom: 0,
+  },
+  tabContentArea: {
+    flex: 1,
+  },
+  body: { paddingHorizontal: 16, paddingTop: 0, paddingBottom: 0, marginBottom: 0 },
 
   // Tab bar styles
   tabBar: {
@@ -603,6 +910,13 @@ const styles = StyleSheet.create({
     paddingVertical: 40,
     backgroundColor: BG,
   },
+  myEventsEmptyState: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 20,
+    backgroundColor: BG,
+    marginTop: 20,
+  },
   emptyStateTitle: {
     fontSize: 24,
     fontWeight: 'bold',
@@ -615,5 +929,44 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: 'center',
     paddingHorizontal: 20,
+  },
+  // FAB styles
+  fab: {
+    position: 'absolute',
+    bottom: 80,
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#111',
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    zIndex: 1000,
+  },
+
+  // Full-screen modal styles
+  fullScreenModal: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+    backgroundColor: '#fff',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111',
   },
 });

@@ -46,11 +46,9 @@ export default function EventList() {
   // Determine which tabs should be visible based on role
   const getVisibleTabs = (): TabKey[] => {
     if (role === 'promoter') {
-      // Promoters see gigs (for managing events), notifications, and profile
-      return ['gigs', 'notifications', 'profile'];
+      return ['gigs', 'groups', 'notifications', 'profile'];
     }
-    // Default: show all tabs for talent and other roles
-    return ['gigs', 'groups', 'notifications', 'profile'];
+    return ['gigs', 'groups', 'notifications', 'profile']; // for talents and others
   };
 
   const NavItem = ({

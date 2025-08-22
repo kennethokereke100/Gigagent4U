@@ -2,19 +2,20 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import {
-    FlatList,
-    Image,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  FlatList,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import GroupFilter from '../../../components/GroupFilter';
+import { useUserRole } from '../../../contexts/UserRoleContext';
 
 const BG = '#F5F3F0';
 
@@ -42,9 +43,13 @@ const GROUPS: Group[] = [
   { id: '10', name: 'Cutmen Crew', image: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=300&q=80&fit=crop', members: 310, type: 'Private', pillar: 'Medical', distance: 89.2 },
 ];
 
+// Mock data for promoter's group (the group they own/manage)
+const PROMOTER_GROUP = '1'; // Comedians Circle - the group this promoter owns
+
 export default function Groups() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { role } = useUserRole();
   const [query, setQuery] = useState('');
   const [filterVisible, setFilterVisible] = useState(false);
   const [filters, setFilters] = useState<Filters>({ pillars: [], maxDistance: 25 });
@@ -75,6 +80,17 @@ export default function Groups() {
     return result;
   }, [query, filters]);
 
+  // Separate groups for promoters
+  const myGroup = useMemo(() => {
+    if (role !== 'promoter') return null;
+    return filtered.find(g => g.id === PROMOTER_GROUP) || null;
+  }, [filtered, role]);
+
+  const otherGroups = useMemo(() => {
+    if (role !== 'promoter') return filtered;
+    return filtered.filter(g => g.id !== PROMOTER_GROUP);
+  }, [filtered, role]);
+
   const handleFiltersChange = (newFilters: Filters) => {
     setFilters(newFilters);
   };
@@ -86,7 +102,7 @@ export default function Groups() {
   // Check if filters are active
   const hasActiveFilters = filters.pillars.length > 0 || filters.maxDistance !== 25;
 
-  const renderItem = ({ item }: { item: Group }) => (
+  const GroupRow = ({ item }: { item: Group }) => (
     <Pressable
       onPress={() => router.push('/screen/gigagent/groupdetail')}
       style={({ pressed }) => [styles.row, pressed && { opacity: 0.9 }]}
@@ -114,6 +130,8 @@ export default function Groups() {
       <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
     </Pressable>
   );
+
+  const renderItem = ({ item }: { item: Group }) => <GroupRow item={item} />;
 
   return (
     <KeyboardAvoidingView
@@ -154,19 +172,65 @@ export default function Groups() {
         </View>
       </View>
 
-      <FlatList
-        data={filtered}
-        keyExtractor={item => item.id}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16 }}
-        ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
-        renderItem={renderItem}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyStateTitle}>No groups found</Text>
-            <Text style={styles.emptyStateSubtitle}>Try adjusting your filters</Text>
-          </View>
-        }
-      />
+      {role === 'promoter' ? (
+        // Promoter view with two sections
+        <FlatList
+          data={[]} // Empty data, we'll render sections manually
+          keyExtractor={() => 'section'}
+          renderItem={() => null} // Required prop but not used
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16 }}
+          ListHeaderComponent={() => (
+            <View>
+              {/* My Group Section */}
+              <Text style={styles.sectionTitle}>My Group</Text>
+              {myGroup ? (
+                <GroupRow item={myGroup} />
+              ) : (
+                <Text style={styles.emptyStateSubtitle}>You have not created a group yet</Text>
+              )}
+
+              {/* Divider */}
+              {myGroup && otherGroups.length > 0 && (
+                <View style={styles.divider} />
+              )}
+
+              {/* Other Groups Section */}
+              {otherGroups.length > 0 && (
+                <>
+                  <Text style={styles.sectionTitle}>Other Groups</Text>
+                  {otherGroups.map((item, index) => (
+                    <View key={item.id}>
+                      <GroupRow item={item} />
+                      {index < otherGroups.length - 1 && <View style={{ height: 10 }} />}
+                    </View>
+                  ))}
+                </>
+              )}
+            </View>
+          )}
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateTitle}>No groups found</Text>
+              <Text style={styles.emptyStateSubtitle}>Try adjusting your filters</Text>
+            </View>
+          }
+        />
+      ) : (
+        // Talent view (original behavior)
+        <FlatList
+          data={filtered}
+          keyExtractor={item => item.id}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16 }}
+          ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+          renderItem={renderItem}
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateTitle}>No groups found</Text>
+              <Text style={styles.emptyStateSubtitle}>Try adjusting your filters</Text>
+            </View>
+          }
+        />
+      )}
 
       <GroupFilter
         visible={filterVisible}
@@ -182,7 +246,18 @@ export default function Groups() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
-  header: { paddingHorizontal: 16, paddingBottom: 12, gap: 12, backgroundColor: BG },
+  header: { 
+    paddingHorizontal: 16, 
+    paddingBottom: 12, 
+    gap: 12, 
+    backgroundColor: BG,
+    // Add drop shadow to match gig.tsx
+    elevation: 6, // Android shadow
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+  },
   title: { fontSize: 28, fontWeight: '700', color: '#111' },
   searchRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   avatar: { width: 36, height: 36, borderRadius: 18 },
@@ -259,5 +334,17 @@ const styles = StyleSheet.create({
   emptyStateSubtitle: {
     fontSize: 14,
     color: '#6B7280',
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#111',
+    marginBottom: 12,
+    marginTop: 16,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#E5E7EB',
+    marginVertical: 16,
   },
 });
