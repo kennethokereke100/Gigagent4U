@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import PickLocationSheet from '../../components/PickLocationSheet';
+import { useUserLocation } from '../../contexts/UserLocationContext';
 import { useUserRole } from '../../contexts/UserRoleContext';
 
 const BG = '#F5F3F0';
@@ -19,6 +20,7 @@ export default function LocationSearch() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { role } = useUserRole();
+  const { setLocation } = useUserLocation();
   const [loading, setLoading] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [chosenCity, setChosenCity] = useState<string | null>(null);
@@ -41,11 +43,32 @@ export default function LocationSearch() {
         goToEventList();
         return;
       }
-      await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      setLoading(false);
-      // If you want, you can reverse-geocode and then call goToConfirm(city)
-      goToEventList();
-    } catch {
+      
+      const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      
+      // Reverse geocode to get city and region
+      const reverseGeocode = await Location.reverseGeocodeAsync({
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+      });
+      
+      if (reverseGeocode.length > 0) {
+        const location = reverseGeocode[0];
+        const city = location.city || location.subregion || 'Unknown City';
+        const region = location.region || '';
+        const cityStateString = region ? `${city}, ${region}` : city;
+        
+        // Save to global context
+        setLocation(city, region);
+        setChosenCity(cityStateString);
+        setLoading(false);
+        goToConfirm(cityStateString);
+      } else {
+        setLoading(false);
+        goToEventList();
+      }
+    } catch (error) {
+      console.error('Location error:', error);
       setLoading(false);
       goToEventList();
     }
@@ -97,9 +120,15 @@ export default function LocationSearch() {
         onClose={() => setPickerOpen(false)}
         onDone={(picked) => {
           if (picked) {
+            // Parse city and state from picked location
+            const locationParts = picked.name.split(', ');
+            const city = locationParts[0] || picked.name;
+            const state = locationParts[1] || '';
+            
+            // Save to global context
+            setLocation(city, state);
             setChosenCity(picked.name);
             setPickerOpen(false);
-            // Pass only the city name
             goToConfirm(picked.name);
           } else {
             setPickerOpen(false);

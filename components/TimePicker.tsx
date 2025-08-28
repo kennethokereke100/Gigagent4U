@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+    Alert,
     Modal,
     Pressable,
     ScrollView,
@@ -26,16 +27,79 @@ const ampm = ['AM', 'PM'];
 
 export default function TimePicker({ value, onSelect, placeholder = "Time" }: TimePickerProps) {
   const [modalVisible, setModalVisible] = useState(false);
+  const [hasBeenOpened, setHasBeenOpened] = useState(false);
   
-  // From time state
-  const [fromHour, setFromHour] = useState<string>('4');
-  const [fromMinute, setFromMinute] = useState<string>('30');
+  // From time state - default to 01:00 PM
+  const [fromHour, setFromHour] = useState<string>('1');
+  const [fromMinute, setFromMinute] = useState<string>('00');
   const [fromAmPm, setFromAmPm] = useState<string>('PM');
   
-  // To time state
-  const [toHour, setToHour] = useState<string>('6');
-  const [toMinute, setToMinute] = useState<string>('40');
+  // To time state - default to 01:00 PM
+  const [toHour, setToHour] = useState<string>('1');
+  const [toMinute, setToMinute] = useState<string>('00');
   const [toAmPm, setToAmPm] = useState<string>('PM');
+
+  // Parse existing value when component mounts or value changes
+  useEffect(() => {
+    if (value && !hasBeenOpened) {
+      // Parse existing time range like "1:00 PM - 2:00 PM"
+      const timeRange = value.split(' - ');
+      if (timeRange.length === 2) {
+        const fromTime = timeRange[0].trim();
+        const toTime = timeRange[1].trim();
+        
+        // Parse from time
+        const fromMatch = fromTime.match(/(\d+):(\d{2})\s*(AM|PM)/);
+        if (fromMatch) {
+          setFromHour(fromMatch[1]);
+          setFromMinute(fromMatch[2]);
+          setFromAmPm(fromMatch[3]);
+        }
+        
+        // Parse to time
+        const toMatch = toTime.match(/(\d+):(\d{2})\s*(AM|PM)/);
+        if (toMatch) {
+          setToHour(toMatch[1]);
+          setToMinute(toMatch[2]);
+          setToAmPm(toMatch[3]);
+        }
+      }
+    }
+  }, [value, hasBeenOpened]);
+
+  // Helper function to convert time to minutes for comparison
+  const timeToMinutes = (hour: string, minute: string, ampm: string): number => {
+    let h = parseInt(hour);
+    const m = parseInt(minute);
+    
+    if (ampm === 'PM' && h !== 12) h += 12;
+    if (ampm === 'AM' && h === 12) h = 0;
+    
+    return h * 60 + m;
+  };
+
+  // Helper function to validate time selection
+  const validateTimeSelection = (newHour: string, newMinute: string, newAmPm: string, isFromTime: boolean): boolean => {
+    const newTimeMinutes = timeToMinutes(newHour, newMinute, newAmPm);
+    
+    if (isFromTime) {
+      // For from time, check if it's before current to time
+      const toTimeMinutes = timeToMinutes(toHour, toMinute, toAmPm);
+      if (newTimeMinutes >= toTimeMinutes) {
+        Alert.alert('Invalid Time', 'Start time must be earlier than end time.');
+        return false;
+      }
+    } else {
+      // For to time, check if it's after current from time
+      const fromTimeMinutes = timeToMinutes(fromHour, fromMinute, fromAmPm);
+      if (newTimeMinutes <= fromTimeMinutes) {
+        Alert.alert('Invalid Time', 'End time must be later than start time.');
+        return false;
+      }
+    }
+    
+    return true;
+  };
 
   const handleDone = () => {
     const fromTime = `${fromHour}:${fromMinute} ${fromAmPm}`;
@@ -46,12 +110,13 @@ export default function TimePicker({ value, onSelect, placeholder = "Time" }: Ti
   };
 
   const handleClear = () => {
-    setFromHour('4');
-    setFromMinute('30');
+    setFromHour('1');
+    setFromMinute('00');
     setFromAmPm('PM');
-    setToHour('6');
-    setToMinute('40');
+    setToHour('1');
+    setToMinute('00');
     setToAmPm('PM');
+    setHasBeenOpened(false);
     onSelect('');
   };
 
@@ -59,7 +124,10 @@ export default function TimePicker({ value, onSelect, placeholder = "Time" }: Ti
     <>
       <Pressable 
         style={styles.inputContainer} 
-        onPress={() => setModalVisible(true)}
+        onPress={() => {
+          setModalVisible(true);
+          setHasBeenOpened(true);
+        }}
       >
         <Text style={[styles.inputText, !value && styles.placeholder]}>
           {value || placeholder}
@@ -72,8 +140,14 @@ export default function TimePicker({ value, onSelect, placeholder = "Time" }: Ti
         transparent
         animationType="slide"
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <Pressable 
+          style={styles.modalOverlay}
+          onPress={() => setModalVisible(false)}
+        >
+          <Pressable 
+            style={styles.modalContent}
+            onPress={(e) => e.stopPropagation()}
+          >
             {/* Header */}
             <View style={styles.modalHeader}>
               <Pressable onPress={handleClear}>
@@ -95,12 +169,16 @@ export default function TimePicker({ value, onSelect, placeholder = "Time" }: Ti
                   <ScrollView style={styles.pickerColumn} showsVerticalScrollIndicator={false}>
                     {hours.map((hour) => (
                       <Pressable
-                        key={hour}
+                        key={`from-hour-${hour}`}
                         style={[
                           styles.pickerItem,
                           fromHour === hour && styles.selectedItem
                         ]}
-                        onPress={() => setFromHour(hour)}
+                        onPress={() => {
+                          if (validateTimeSelection(hour, fromMinute, fromAmPm, true)) {
+                            setFromHour(hour);
+                          }
+                        }}
                       >
                         <Text style={[
                           styles.pickerItemText,
@@ -118,12 +196,16 @@ export default function TimePicker({ value, onSelect, placeholder = "Time" }: Ti
                   <ScrollView style={styles.pickerColumn} showsVerticalScrollIndicator={false}>
                     {minutes.map((minute) => (
                       <Pressable
-                        key={minute}
+                        key={`from-minute-${minute}`}
                         style={[
                           styles.pickerItem,
                           fromMinute === minute && styles.selectedItem
                         ]}
-                        onPress={() => setFromMinute(minute)}
+                        onPress={() => {
+                          if (validateTimeSelection(fromHour, minute, fromAmPm, true)) {
+                            setFromMinute(minute);
+                          }
+                        }}
                       >
                         <Text style={[
                           styles.pickerItemText,
@@ -139,12 +221,16 @@ export default function TimePicker({ value, onSelect, placeholder = "Time" }: Ti
                   <ScrollView style={styles.pickerColumn} showsVerticalScrollIndicator={false}>
                     {ampm.map((period) => (
                       <Pressable
-                        key={period}
+                        key={`from-period-${period}`}
                         style={[
                           styles.pickerItem,
                           fromAmPm === period && styles.selectedItem
                         ]}
-                        onPress={() => setFromAmPm(period)}
+                        onPress={() => {
+                          if (validateTimeSelection(fromHour, fromMinute, period, true)) {
+                            setFromAmPm(period);
+                          }
+                        }}
                       >
                         <Text style={[
                           styles.pickerItemText,
@@ -166,12 +252,16 @@ export default function TimePicker({ value, onSelect, placeholder = "Time" }: Ti
                   <ScrollView style={styles.pickerColumn} showsVerticalScrollIndicator={false}>
                     {hours.map((hour) => (
                       <Pressable
-                        key={hour}
+                        key={`to-hour-${hour}`}
                         style={[
                           styles.pickerItem,
                           toHour === hour && styles.selectedItem
                         ]}
-                        onPress={() => setToHour(hour)}
+                        onPress={() => {
+                          if (validateTimeSelection(hour, toMinute, toAmPm, false)) {
+                            setToHour(hour);
+                          }
+                        }}
                       >
                         <Text style={[
                           styles.pickerItemText,
@@ -189,12 +279,16 @@ export default function TimePicker({ value, onSelect, placeholder = "Time" }: Ti
                   <ScrollView style={styles.pickerColumn} showsVerticalScrollIndicator={false}>
                     {minutes.map((minute) => (
                       <Pressable
-                        key={minute}
+                        key={`to-minute-${minute}`}
                         style={[
                           styles.pickerItem,
                           toMinute === minute && styles.selectedItem
                         ]}
-                        onPress={() => setToMinute(minute)}
+                        onPress={() => {
+                          if (validateTimeSelection(toHour, minute, toAmPm, false)) {
+                            setToMinute(minute);
+                          }
+                        }}
                       >
                         <Text style={[
                           styles.pickerItemText,
@@ -210,12 +304,16 @@ export default function TimePicker({ value, onSelect, placeholder = "Time" }: Ti
                   <ScrollView style={styles.pickerColumn} showsVerticalScrollIndicator={false}>
                     {ampm.map((period) => (
                       <Pressable
-                        key={period}
+                        key={`to-period-${period}`}
                         style={[
                           styles.pickerItem,
                           toAmPm === period && styles.selectedItem
                         ]}
-                        onPress={() => setToAmPm(period)}
+                        onPress={() => {
+                          if (validateTimeSelection(toHour, toMinute, period, false)) {
+                            setToAmPm(period);
+                          }
+                        }}
                       >
                         <Text style={[
                           styles.pickerItemText,
@@ -229,8 +327,8 @@ export default function TimePicker({ value, onSelect, placeholder = "Time" }: Ti
                 </View>
               </View>
             </View>
-          </View>
-        </View>
+          </Pressable>
+        </Pressable>
       </Modal>
     </>
   );

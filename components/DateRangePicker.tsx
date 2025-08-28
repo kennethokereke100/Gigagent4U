@@ -1,12 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import {
-    Modal,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
 
 interface DateRangePickerProps {
@@ -21,8 +20,37 @@ const months = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
-const currentYear = new Date().getFullYear();
-const years = Array.from({ length: 10 }, (_, i) => currentYear - 5 + i);
+const daysOfWeek = ['S', 'M', 'T', 'W', 'Th', 'F', 'S'];
+
+// Helper function to get days in a month
+const getDaysInMonth = (month: number, year: number) => {
+  return new Date(year, month + 1, 0).getDate();
+};
+
+// Helper function to get first day of month (0 = Sunday, 1 = Monday, etc.)
+const getFirstDayOfMonth = (month: number, year: number) => {
+  return new Date(year, month, 1).getDay();
+};
+
+// Helper function to format date as "Month Day Year"
+const formatDate = (date: Date) => {
+  const month = months[date.getMonth()];
+  const day = date.getDate();
+  const year = date.getFullYear();
+  const suffix = getDaySuffix(day);
+  return `${month} ${day}${suffix} ${year}`;
+};
+
+// Helper function to get day suffix (1st, 2nd, 3rd, etc.)
+const getDaySuffix = (day: number) => {
+  if (day >= 11 && day <= 13) return 'th';
+  switch (day % 10) {
+    case 1: return 'st';
+    case 2: return 'nd';
+    case 3: return 'rd';
+    default: return 'th';
+  }
+};
 
 export default function DateRangePicker({ 
   startDate, 
@@ -31,35 +59,118 @@ export default function DateRangePicker({
   placeholder = "Select date range" 
 }: DateRangePickerProps) {
   const [modalVisible, setModalVisible] = useState(false);
-  const [selectedStartMonth, setSelectedStartMonth] = useState<string>('');
-  const [selectedStartYear, setSelectedStartYear] = useState<number>(currentYear);
-  const [selectedEndMonth, setSelectedEndMonth] = useState<string>('');
-  const [selectedEndYear, setSelectedEndYear] = useState<number>(currentYear);
+  const [selectedStartDate, setSelectedStartDate] = useState<Date | null>(null);
+  const [selectedEndDate, setSelectedEndDate] = useState<Date | null>(null);
+  
+  // Calendar state
+  const [startMonth, setStartMonth] = useState(new Date().getMonth());
+  const [startYear, setStartYear] = useState(new Date().getFullYear());
+  const [endMonth, setEndMonth] = useState(new Date().getMonth());
+  const [endYear, setEndYear] = useState(new Date().getFullYear());
 
   const handleDone = () => {
-    if (selectedStartMonth && selectedStartYear && selectedEndMonth && selectedEndYear) {
-      const startDateStr = `${selectedStartMonth} ${selectedStartYear}`;
-      const endDateStr = `${selectedEndMonth} ${selectedEndYear}`;
+    if (selectedStartDate && selectedEndDate) {
+      const startDateStr = formatDate(selectedStartDate);
+      const endDateStr = formatDate(selectedEndDate);
       onSelect(startDateStr, endDateStr);
     }
     setModalVisible(false);
   };
 
   const handleClear = () => {
-    setSelectedStartMonth('');
-    setSelectedStartYear(currentYear);
-    setSelectedEndMonth('');
-    setSelectedEndYear(currentYear);
+    setSelectedStartDate(null);
+    setSelectedEndDate(null);
     onSelect('', '');
   };
 
-  const isEndDateDisabled = (month: string, year: number) => {
-    if (!selectedStartMonth || !selectedStartYear) return false;
+  const handleDateSelect = (date: Date, isStartDate: boolean) => {
+    if (isStartDate) {
+      setSelectedStartDate(date);
+      // If end date is before new start date, clear it
+      if (selectedEndDate && selectedEndDate <= date) {
+        setSelectedEndDate(null);
+      }
+    } else {
+      // Only allow end date if start date is selected and end date is after start date
+      if (selectedStartDate && date > selectedStartDate) {
+        setSelectedEndDate(date);
+      }
+    }
+  };
+
+  const isDateDisabled = (date: Date, isStartDate: boolean) => {
+    if (isStartDate) {
+      // For start date, disable past dates
+      return date < new Date(new Date().setHours(0, 0, 0, 0));
+    } else {
+      // For end date, disable dates before or equal to start date
+      return !selectedStartDate || date <= selectedStartDate;
+    }
+  };
+
+  const isDateSelected = (date: Date) => {
+    if (!selectedStartDate && !selectedEndDate) return false;
     
-    const startDate = new Date(`${selectedStartMonth} 1, ${selectedStartYear}`);
-    const endDate = new Date(`${month} 1, ${year}`);
+    const dateStr = date.toDateString();
+    return (
+      (selectedStartDate && selectedStartDate.toDateString() === dateStr) ||
+      (selectedEndDate && selectedEndDate.toDateString() === dateStr)
+    );
+  };
+
+  const isDateInRange = (date: Date) => {
+    if (!selectedStartDate || !selectedEndDate) return false;
     
-    return endDate <= startDate;
+    const dateStr = date.toDateString();
+    const startStr = selectedStartDate.toDateString();
+    const endStr = selectedEndDate.toDateString();
+    
+    return dateStr > startStr && dateStr < endStr;
+  };
+
+  const renderCalendar = (month: number, year: number, isStartDate: boolean) => {
+    const daysInMonth = getDaysInMonth(month, year);
+    const firstDay = getFirstDayOfMonth(month, year);
+    const days = [];
+    const context = isStartDate ? 'start' : 'end';
+
+    // Add empty cells for days before the first day of the month
+    for (let i = 0; i < firstDay; i++) {
+      days.push(<View key={`${context}-empty-${i}`} style={styles.calendarDay} />);
+    }
+
+    // Add days of the month
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(year, month, day);
+      const disabled = isDateDisabled(date, isStartDate);
+      const selected = isDateSelected(date);
+      const inRange = isDateInRange(date);
+
+      days.push(
+        <Pressable
+          key={`${context}-day-${day}`}
+          style={[
+            styles.calendarDay,
+            selected && styles.selectedDay,
+            inRange && styles.rangeDay,
+            disabled && styles.disabledDay
+          ]}
+          onPress={() => !disabled && handleDateSelect(date, isStartDate)}
+          disabled={disabled}
+        >
+          <Text style={[
+            styles.dayText,
+            selected && styles.selectedDayText,
+            inRange && styles.rangeDayText,
+            disabled && styles.disabledDayText
+          ]}>
+            {day}
+          </Text>
+        </Pressable>
+      );
+    }
+
+    return days;
   };
 
   const displayValue = startDate && endDate ? `${startDate} - ${endDate}` : '';
@@ -81,8 +192,14 @@ export default function DateRangePicker({
         transparent
         animationType="slide"
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <Pressable 
+          style={styles.modalOverlay}
+          onPress={() => setModalVisible(false)}
+        >
+          <Pressable 
+            style={styles.modalContent}
+            onPress={(e) => e.stopPropagation()}
+          >
             {/* Header */}
             <View style={styles.modalHeader}>
               <Pressable onPress={handleClear}>
@@ -94,112 +211,125 @@ export default function DateRangePicker({
               </Pressable>
             </View>
 
-            {/* Date Range Picker */}
-            <View style={styles.pickerContainer}>
-              {/* Start Date */}
-              <View style={styles.dateColumn}>
-                <Text style={styles.columnTitle}>Start Date</Text>
-                <View style={styles.pickerRow}>
-                  {/* Start Month Picker */}
-                  <ScrollView style={styles.pickerColumn} showsVerticalScrollIndicator={false}>
-                    {months.map((month) => (
-                      <Pressable
-                        key={month}
-                        style={[
-                          styles.pickerItem,
-                          selectedStartMonth === month && styles.selectedItem
-                        ]}
-                        onPress={() => setSelectedStartMonth(month)}
-                      >
-                        <Text style={[
-                          styles.pickerItemText,
-                          selectedStartMonth === month && styles.selectedItemText
-                        ]}>
-                          {month}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </ScrollView>
+            {/* Date Range Display */}
+            <View style={styles.dateRangeDisplay}>
+              <Text style={[
+                styles.dateRangeText,
+                selectedStartDate && styles.selectedDateText
+              ]}>
+                {selectedStartDate ? formatDate(selectedStartDate) : 'Start Date'}
+              </Text>
+              <Text style={styles.arrow}>→</Text>
+              <Text style={[
+                styles.dateRangeText,
+                selectedEndDate && styles.selectedDateText
+              ]}>
+                {selectedEndDate ? formatDate(selectedEndDate) : 'End Date'}
+              </Text>
+            </View>
 
-                  {/* Start Year Picker */}
-                  <ScrollView style={styles.pickerColumn} showsVerticalScrollIndicator={false}>
-                    {years.map((year) => (
-                      <Pressable
-                        key={year}
-                        style={[
-                          styles.pickerItem,
-                          selectedStartYear === year && styles.selectedItem
-                        ]}
-                        onPress={() => setSelectedStartYear(year)}
-                      >
-                        <Text style={[
-                          styles.pickerItemText,
-                          selectedStartYear === year && styles.selectedItemText
-                        ]}>
-                          {year}
-                        </Text>
-                      </Pressable>
+            {/* Calendar Container */}
+            <View style={styles.calendarContainer}>
+              {/* Start Date Calendar */}
+              <View style={styles.calendarColumn}>
+                <View style={styles.calendarHeader}>
+                  <Pressable 
+                    style={styles.monthButton}
+                    onPress={() => {
+                      if (startMonth > 0) {
+                        setStartMonth(startMonth - 1);
+                      } else {
+                        setStartMonth(11);
+                        setStartYear(startYear - 1);
+                      }
+                    }}
+                  >
+                    <Ionicons name="chevron-back" size={20} color="#007AFF" />
+                  </Pressable>
+                  <Text style={styles.monthYearText}>
+                    {months[startMonth]} {startYear}
+                  </Text>
+                  <Pressable 
+                    style={styles.monthButton}
+                    onPress={() => {
+                      if (startMonth < 11) {
+                        setStartMonth(startMonth + 1);
+                      } else {
+                        setStartMonth(0);
+                        setStartYear(startYear + 1);
+                      }
+                    }}
+                  >
+                    <Ionicons name="chevron-forward" size={20} color="#007AFF" />
+                  </Pressable>
+                </View>
+                
+                <View style={styles.calendar}>
+                  {/* Days of week header */}
+                  <View style={styles.daysHeader}>
+                    {daysOfWeek.map((day, idx) => (
+                      <Text key={`start-${idx}-${day}`} style={styles.dayHeaderText}>{day}</Text>
                     ))}
-                  </ScrollView>
+                  </View>
+                  
+                  {/* Calendar grid */}
+                  <View style={styles.calendarGrid}>
+                    {renderCalendar(startMonth, startYear, true)}
+                  </View>
                 </View>
               </View>
 
-              {/* End Date */}
-              <View style={styles.dateColumn}>
-                <Text style={styles.columnTitle}>End Date</Text>
-                <View style={styles.pickerRow}>
-                  {/* End Month Picker */}
-                  <ScrollView style={styles.pickerColumn} showsVerticalScrollIndicator={false}>
-                    {months.map((month) => (
-                      <Pressable
-                        key={month}
-                        style={[
-                          styles.pickerItem,
-                          selectedEndMonth === month && styles.selectedItem,
-                          isEndDateDisabled(month, selectedEndYear) && styles.disabledItem
-                        ]}
-                        onPress={() => !isEndDateDisabled(month, selectedEndYear) && setSelectedEndMonth(month)}
-                        disabled={isEndDateDisabled(month, selectedEndYear)}
-                      >
-                        <Text style={[
-                          styles.pickerItemText,
-                          selectedEndMonth === month && styles.selectedItemText,
-                          isEndDateDisabled(month, selectedEndYear) && styles.disabledItemText
-                        ]}>
-                          {month}
-                        </Text>
-                      </Pressable>
+              {/* End Date Calendar */}
+              <View style={styles.calendarColumn}>
+                <View style={styles.calendarHeader}>
+                  <Pressable 
+                    style={styles.monthButton}
+                    onPress={() => {
+                      if (endMonth > 0) {
+                        setEndMonth(endMonth - 1);
+                      } else {
+                        setEndMonth(11);
+                        setEndYear(endYear - 1);
+                      }
+                    }}
+                  >
+                    <Ionicons name="chevron-back" size={20} color="#007AFF" />
+                  </Pressable>
+                  <Text style={styles.monthYearText}>
+                    {months[endMonth]} {endYear}
+                  </Text>
+                  <Pressable 
+                    style={styles.monthButton}
+                    onPress={() => {
+                      if (endMonth < 11) {
+                        setEndMonth(endMonth + 1);
+                      } else {
+                        setEndMonth(0);
+                        setEndYear(endYear + 1);
+                      }
+                    }}
+                  >
+                    <Ionicons name="chevron-forward" size={20} color="#007AFF" />
+                  </Pressable>
+                </View>
+                
+                <View style={styles.calendar}>
+                  {/* Days of week header */}
+                  <View style={styles.daysHeader}>
+                    {daysOfWeek.map((day, idx) => (
+                      <Text key={`end-${idx}-${day}`} style={styles.dayHeaderText}>{day}</Text>
                     ))}
-                  </ScrollView>
-
-                  {/* End Year Picker */}
-                  <ScrollView style={styles.pickerColumn} showsVerticalScrollIndicator={false}>
-                    {years.map((year) => (
-                      <Pressable
-                        key={year}
-                        style={[
-                          styles.pickerItem,
-                          selectedEndYear === year && styles.selectedItem,
-                          isEndDateDisabled(selectedEndMonth, year) && styles.disabledItem
-                        ]}
-                        onPress={() => !isEndDateDisabled(selectedEndMonth, year) && setSelectedEndYear(year)}
-                        disabled={isEndDateDisabled(selectedEndMonth, year)}
-                      >
-                        <Text style={[
-                          styles.pickerItemText,
-                          selectedEndYear === year && styles.selectedItemText,
-                          isEndDateDisabled(selectedEndMonth, year) && styles.disabledItemText
-                        ]}>
-                          {year}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </ScrollView>
+                  </View>
+                  
+                  {/* Calendar grid */}
+                  <View style={styles.calendarGrid}>
+                    {renderCalendar(endMonth, endYear, false)}
+                  </View>
                 </View>
               </View>
             </View>
-          </View>
-        </View>
+          </Pressable>
+        </Pressable>
       </Modal>
     </>
   );
@@ -235,7 +365,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingBottom: 40,
-    maxHeight: '80%',
+    maxHeight: '95%',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -256,48 +386,100 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#007AFF',
   },
-  pickerContainer: {
+  dateRangeDisplay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  dateRangeText: {
+    fontSize: 16,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  selectedDateText: {
+    color: '#007AFF',
+    textDecorationLine: 'underline',
+  },
+  arrow: {
+    fontSize: 16,
+    color: '#6B7280',
+    marginHorizontal: 12,
+  },
+  calendarContainer: {
     flexDirection: 'row',
     paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingTop: 10,
+    paddingBottom: 20,
   },
-  dateColumn: {
+  calendarColumn: {
     flex: 1,
     marginHorizontal: 10,
   },
-  columnTitle: {
+  calendarHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  monthButton: {
+    padding: 8,
+  },
+  monthYearText: {
     fontSize: 16,
     fontWeight: '600',
     color: '#111',
-    textAlign: 'center',
-    marginBottom: 10,
   },
-  pickerRow: {
+  calendar: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+  },
+  daysHeader: {
     flexDirection: 'row',
-    height: 200,
+    marginBottom: 8,
   },
-  pickerColumn: {
+  dayHeaderText: {
     flex: 1,
+    textAlign: 'center',
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6B7280',
+    paddingVertical: 8,
   },
-  pickerItem: {
-    paddingVertical: 12,
-    paddingHorizontal: 10,
+  calendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  calendarDay: {
+    width: '14.28%',
+    aspectRatio: 1,
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  selectedItem: {
-    backgroundColor: '#F3F4F6',
-  },
-  disabledItem: {
-    opacity: 0.3,
-  },
-  pickerItemText: {
+  dayText: {
     fontSize: 14,
     color: '#111',
   },
-  selectedItemText: {
+  selectedDay: {
+    backgroundColor: '#007AFF',
+    borderRadius: 20,
+  },
+  selectedDayText: {
+    color: '#fff',
     fontWeight: '600',
   },
-  disabledItemText: {
+  rangeDay: {
+    backgroundColor: '#E3F2FD',
+  },
+  rangeDayText: {
+    color: '#007AFF',
+  },
+  disabledDay: {
+    opacity: 0.3,
+  },
+  disabledDayText: {
     color: '#9CA3AF',
   },
 });

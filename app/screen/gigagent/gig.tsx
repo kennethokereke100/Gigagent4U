@@ -5,13 +5,13 @@ import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  FlatList,
-  Image,
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  View
+    FlatList,
+    Image,
+    Modal,
+    Pressable,
+    StyleSheet,
+    Text,
+    View
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import FilterBottomSheet from '../../../components/FilterBottomSheet';
@@ -115,392 +115,9 @@ const DEFAULT_FILTERS: Filters = {
   maxMiles: 50,           // <= THIS is the default distance gate
 };
 
-// Tab Components
-const UpcomingTab: React.FC = () => {
-  const [favorites, setFavorites] = useState<Record<string, boolean>>({});
-  
-  const toggleFav = (id: string) =>
-    setFavorites(prev => ({ ...prev, [id]: !prev[id] }));
 
-  const formatMiles = (miles?: number) => {
-    if (typeof miles === 'number') {
-      return `${miles.toFixed(1)} miles away`;
-    }
-    return '';
-  };
 
-  function timeAgo(iso: string) {
-    const now = Date.now();
-    const then = new Date(iso).getTime();
-    const diffMs = Math.max(0, now - then);
-    const mins = Math.floor(diffMs / 60000);
-    if (mins < 60) return `${mins} min${mins !== 1 ? 's' : ''} ago`;
-    const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs} hour${hrs !== 1 ? 's' : ''} ago`;
-    const days = Math.floor(hrs / 24);
-    return `${days} day${days !== 1 ? 's' : ''} ago`;
-  }
 
-  const navigateToEventDetail = () => {
-    console.log('Navigate to event detail');
-  };
-
-  const renderEvent = ({ item }: { item: EventItem }) => {
-    const milesLine = formatMiles(item.miles);
-    
-    return (
-      <Pressable 
-        style={styles.card} 
-        onPress={navigateToEventDetail}
-      >
-        <View style={{ position: 'relative', borderTopLeftRadius: 16, borderTopRightRadius: 16, overflow: 'hidden' }}>
-          <Image source={{ uri: 'https://picsum.photos/800/600?random=' + item.id }} style={styles.cardImage} />
-          
-          {/* Posted badge */}
-          <View style={styles.postedBadge}>
-            <Text style={styles.postedText}>{timeAgo(item.postedAt)}</Text>
-          </View>
-
-          {/* Action buttons */}
-          <View style={styles.cardActions}>
-            <Pressable style={styles.iconBtn} hitSlop={10}>
-              <Ionicons name="share-outline" size={20} color="#111" />
-            </Pressable>
-            <Pressable 
-              style={styles.iconBtn} 
-              hitSlop={10}
-              onPress={() => toggleFav(item.id)}
-            >
-              <Ionicons 
-                name={favorites[item.id] ? "heart" : "heart-outline"} 
-                size={22} 
-                color={favorites[item.id] ? "#EF4444" : "#111"} 
-              />
-            </Pressable>
-          </View>
-        </View>
-
-        <View style={{ padding: 16 }}>
-          {/* Pillar chip */}
-          <PillarChip label={item.pillar} />
-          
-          {/* Title */}
-          <Text style={styles.cardTitle} numberOfLines={2}>
-            {item.title}
-          </Text>
-
-          {/* Meta info */}
-          <Text style={styles.cardMeta}>
-            {item.date} {item.time} • {item.venue}
-          </Text>
-
-          {/* Miles */}
-          {milesLine ? (
-            <Text style={styles.cardMeta}>
-              {milesLine}
-            </Text>
-          ) : null}
-
-          {/* CTA */}
-          <Pressable 
-            style={styles.cardCta}
-            onPress={navigateToEventDetail}
-          >
-            <Text style={styles.cardCtaText}>View for more details</Text>
-          </Pressable>
-        </View>
-      </Pressable>
-    );
-  };
-
-  // Helper function to parse date strings like "Jan 5th", "Dec 15th"
-  const parseEventDate = (dateStr: string): Date => {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    
-    // Map month abbreviations to numbers
-    const monthMap: { [key: string]: number } = {
-      'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
-      'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
-    };
-    
-    // Extract month and day from "Jan 5th" format
-    const parts = dateStr.split(' ');
-    const month = monthMap[parts[0]];
-    const day = parseInt(parts[1].replace(/\D/g, '')); // Remove "th", "st", "nd", "rd"
-    
-    // Create date object - assume current year unless it's a past month
-    let year = currentYear;
-    const eventDate = new Date(year, month, day);
-    
-    // If the event date is in the future but the month is in the past, it's from last year
-    if (eventDate > now && month < now.getMonth()) {
-      year = currentYear - 1;
-      return new Date(year, month, day);
-    }
-    
-    return eventDate;
-  };
-
-  const upcomingEvents = MOCK_EVENTS.filter(event => {
-    const eventDate = parseEventDate(event.date);
-    const now = new Date();
-    return eventDate >= now;
-  });
-
-  return (
-    <FlatList 
-      data={upcomingEvents}
-      keyExtractor={i => i.id}
-      renderItem={renderEvent}
-      ItemSeparatorComponent={() => <View style={{ height: 14 }} />}
-      contentContainerStyle={{ padding: 16, paddingTop: 8 }}
-      showsVerticalScrollIndicator={false}
-      style={{ flex: 1 }}
-      ListEmptyComponent={() => (
-        <View style={styles.emptyState}>
-          <Ionicons name="search-outline" size={48} color="#9CA3AF" />
-          <Text style={styles.emptyStateTitle}>No upcoming gigs</Text>
-          <Text style={styles.emptyStateSubtitle}>
-            Try adjusting your filters or check back later
-          </Text>
-        </View>
-      )}
-    />
-  );
-};
-
-const PastTab: React.FC = () => {
-  // Helper function to parse date strings like "Jan 5th", "Dec 15th"
-  const parseEventDate = (dateStr: string): Date => {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    
-    // Map month abbreviations to numbers
-    const monthMap: { [key: string]: number } = {
-      'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
-      'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
-    };
-    
-    // Extract month and day from "Jan 5th" format
-    const parts = dateStr.split(' ');
-    const month = monthMap[parts[0]];
-    const day = parseInt(parts[1].replace(/\D/g, '')); // Remove "th", "st", "nd", "rd"
-    
-    // Create date object - assume current year unless it's a past month
-    let year = currentYear;
-    const eventDate = new Date(year, month, day);
-    
-    // If the event date is in the future but the month is in the past, it's from last year
-    if (eventDate > now && month < now.getMonth()) {
-      year = currentYear - 1;
-      return new Date(year, month, day);
-    }
-    
-    return eventDate;
-  };
-
-  const pastEvents = MOCK_EVENTS.filter(event => {
-    const eventDate = parseEventDate(event.date);
-    const now = new Date();
-    return eventDate < now && !!event.applied;
-  });
-
-  return (
-    <FlatList 
-      data={pastEvents}
-      keyExtractor={i => i.id}
-      renderItem={({ item }) => (
-        <View style={styles.card}>
-          <View style={{ padding: 16 }}>
-            <PillarChip label={item.pillar} />
-            <Text style={styles.cardTitle}>{item.title}</Text>
-            <Text style={styles.cardMeta}>
-              {item.date} {item.time} • {item.venue}
-            </Text>
-          </View>
-        </View>
-      )}
-      ItemSeparatorComponent={() => <View style={{ height: 14 }} />}
-      contentContainerStyle={{ padding: 16, paddingTop: 8 }}
-      showsVerticalScrollIndicator={false}
-      style={{ flex: 1 }}
-      ListEmptyComponent={() => (
-        <View style={styles.emptyState}>
-          <Ionicons name="search-outline" size={48} color="#9CA3AF" />
-          <Text style={styles.emptyStateTitle}>No past gigs</Text>
-          <Text style={styles.emptyStateSubtitle}>
-            Gigs you've applied to will appear here
-          </Text>
-        </View>
-      )}
-    />
-  );
-};
-
-const InvitesTab: React.FC = () => {
-  const inviteEvents = MOCK_EVENTS.filter(event => !!event.invited);
-
-  return (
-    <FlatList 
-      data={inviteEvents}
-      keyExtractor={i => i.id}
-      renderItem={({ item }) => (
-        <View style={styles.card}>
-          <View style={{ padding: 16 }}>
-            <PillarChip label={item.pillar} />
-            <Text style={styles.cardTitle}>{item.title}</Text>
-            <Text style={styles.cardMeta}>
-              {item.date} {item.time} • {item.venue}
-            </Text>
-          </View>
-        </View>
-      )}
-      ItemSeparatorComponent={() => <View style={{ height: 14 }} />}
-      contentContainerStyle={{ padding: 16, paddingTop: 8 }}
-      showsVerticalScrollIndicator={false}
-      style={{ flex: 1 }}
-      ListEmptyComponent={() => (
-        <View style={styles.emptyState}>
-          <Ionicons name="search-outline" size={48} color="#9CA3AF" />
-          <Text style={styles.emptyStateTitle}>No invites</Text>
-          <Text style={styles.emptyStateSubtitle}>
-            Invitations from promoters will appear here
-          </Text>
-        </View>
-      )}
-    />
-  );
-};
-
-const MyEventsTab: React.FC = () => (
-  <View style={styles.myEventsEmptyState}>
-    <Ionicons name="calendar-outline" size={48} color="#9CA3AF" />
-    <Text style={styles.emptyStateTitle}>No events yet</Text>
-    <Text style={styles.emptyStateSubtitle}>
-      "No events yet — create your first one!"
-    </Text>
-  </View>
-);
-
-const CandidatesTab: React.FC = () => (
-  <View style={styles.emptyState}>
-    <Ionicons name="people-outline" size={48} color="#9CA3AF" />
-    <Text style={styles.emptyStateTitle}>No candidates yet</Text>
-    <Text style={styles.emptyStateSubtitle}>
-      Candidates will appear here when they apply to your events.
-    </Text>
-  </View>
-);
-
-const PastEventsTab: React.FC = () => {
-  const router = useRouter();
-  
-  // Helper function to parse date strings like "Jan 5th", "Dec 15th"
-  const parseEventDate = (dateStr: string): Date => {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    
-    // Map month abbreviations to numbers
-    const monthMap: { [key: string]: number } = {
-      'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
-      'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
-    };
-    
-    // Extract month and day from "Jan 5th" format
-    const parts = dateStr.split(' ');
-    const month = monthMap[parts[0]];
-    const day = parseInt(parts[1].replace(/\D/g, '')); // Remove "th", "st", "nd", "rd"
-    
-    // Create date object - assume current year unless it's a past month
-    let year = currentYear;
-    const eventDate = new Date(year, month, day);
-    
-    // If the event date is in the future but the month is in the past, it's from last year
-    if (eventDate > now && month < now.getMonth()) {
-      year = currentYear - 1;
-      return new Date(year, month, day);
-    }
-    
-    return eventDate;
-  };
-  
-  // Always show mock past events (IDs 7-12) for dummy data visibility
-  const pastEvents = MOCK_EVENTS.filter(event => {
-    const isPastEvent = ['7', '8', '9', '10', '11', '12'].includes(event.id);
-    console.log(`Event ${event.id}: ${event.title} - isPastEvent: ${isPastEvent}`);
-    return isPastEvent;
-  });
-  
-  console.log(`PastEventsTab: Found ${pastEvents.length} past events`);
-
-  const renderPastEvent = ({ item }: { item: EventItem }) => (
-    <Pressable 
-      style={styles.card} 
-      onPress={() => {
-        router.push({
-          pathname: '/screen/eventdetail',
-          params: {
-            title: item.title,
-            dateLine: `${item.date} • ${item.time}`,
-            venue: item.venue,
-            priceText: `Gig Price: ${item.priceFrom}`,
-            city: item.venue,
-          }
-        });
-      }}
-    >
-      {/* Event Image */}
-      <Image
-        source={{ uri: 'https://picsum.photos/seed/' + item.id + '/400/200' }}
-        style={styles.cardImage}
-        resizeMode="cover"
-      />
-      
-      {/* Category Pillar */}
-      <View style={styles.cardActions}>
-        <PillarChip label={item.pillar} />
-      </View>
-      
-      {/* Posted Badge */}
-      <View style={styles.postedBadge}>
-        <Text style={styles.postedText}>Posted</Text>
-      </View>
-      
-      {/* Event Details */}
-      <View style={{ padding: 16 }}>
-        <Text style={styles.cardTitle}>{item.title}</Text>
-        <Text style={styles.cardMeta}>
-          {item.date} {item.time} • {item.venue}
-        </Text>
-        <Text style={styles.cardMeta}>
-          {item.distanceMi.toFixed(1)} miles away
-        </Text>
-      </View>
-    </Pressable>
-  );
-
-  return (
-    <FlatList 
-      data={pastEvents}
-      keyExtractor={i => i.id}
-      renderItem={renderPastEvent}
-      ItemSeparatorComponent={() => <View style={{ height: 14 }} />}
-      contentContainerStyle={{ padding: 16, paddingTop: 8 }}
-      showsVerticalScrollIndicator={false}
-      style={{ flex: 1 }}
-      ListEmptyComponent={() => (
-        <View style={styles.emptyState}>
-          <Ionicons name="calendar-outline" size={48} color="#9CA3AF" />
-          <Text style={styles.emptyStateTitle}>No past events</Text>
-          <Text style={styles.emptyStateSubtitle}>
-            Your past events will appear here once they're completed.
-          </Text>
-        </View>
-      )}
-    />
-  );
-};
 
 export default function GigScreen() {
   const router = useRouter();
@@ -591,6 +208,395 @@ export default function GigScreen() {
 
 
   /** -------------------------
+   * Data filtering for tabs
+   * ------------------------ */
+  // Helper function to parse date strings like "Jan 5th", "Dec 15th"
+  const parseEventDate = (dateStr: string): Date => {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    
+    // Map month abbreviations to numbers
+    const monthMap: { [key: string]: number } = {
+      'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
+      'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
+    };
+    
+    // Extract month and day from "Jan 5th" format
+    const parts = dateStr.split(' ');
+    const month = monthMap[parts[0]];
+    const day = parseInt(parts[1].replace(/\D/g, '')); // Remove "th", "st", "nd", "rd"
+    
+    // Create date object - assume current year unless it's a past month
+    let year = currentYear;
+    const eventDate = new Date(year, month, day);
+    
+    // If the event date is in the future but the month is in the past, it's from last year
+    if (eventDate > now && month < now.getMonth()) {
+      year = currentYear - 1;
+      return new Date(year, month, day);
+    }
+    
+    return eventDate;
+  };
+
+  const upcomingEvents = MOCK_EVENTS.filter(event => {
+    const eventDate = parseEventDate(event.date);
+    const now = new Date();
+    return eventDate >= now;
+  });
+
+  const pastEvents = MOCK_EVENTS.filter(event => {
+    const eventDate = parseEventDate(event.date);
+    const now = new Date();
+    return eventDate < now && !!event.applied;
+  });
+
+  const inviteEvents = MOCK_EVENTS.filter(event => !!event.invited);
+
+  // Render event function for upcoming tab
+  const renderEvent = ({ item }: { item: EventItem }) => {
+    const [favorites, setFavorites] = useState<Record<string, boolean>>({});
+    
+    const toggleFav = (id: string) =>
+      setFavorites(prev => ({ ...prev, [id]: !prev[id] }));
+
+    const formatMiles = (miles?: number) => {
+      if (typeof miles === 'number') {
+        return `${miles.toFixed(1)} miles away`;
+      }
+      return '';
+    };
+
+    function timeAgo(iso: string) {
+      const now = Date.now();
+      const then = new Date(iso).getTime();
+      const diffMs = Math.max(0, now - then);
+      const mins = Math.floor(diffMs / 60000);
+      if (mins < 60) return `${mins} min${mins !== 1 ? 's' : ''} ago`;
+      const hrs = Math.floor(mins / 60);
+      if (hrs < 24) return `${hrs} hour${hrs !== 1 ? 's' : ''} ago`;
+      const days = Math.floor(hrs / 24);
+      return `${days} day${days !== 1 ? 's' : ''} ago`;
+    }
+
+    const navigateToEventDetail = () => {
+      console.log('Navigate to event detail');
+    };
+
+    const milesLine = formatMiles(item.miles);
+    
+    return (
+      <Pressable 
+        style={styles.card} 
+        onPress={navigateToEventDetail}
+      >
+        <View style={{ position: 'relative', borderTopLeftRadius: 16, borderTopRightRadius: 16, overflow: 'hidden' }}>
+          <Image source={{ uri: 'https://picsum.photos/800/600?random=' + item.id }} style={styles.cardImage} />
+          
+          {/* Posted badge */}
+          <View style={styles.postedBadge}>
+            <Text style={styles.postedText}>{timeAgo(item.postedAt)}</Text>
+          </View>
+
+          {/* Action buttons */}
+          <View style={styles.cardActions}>
+            <Pressable style={styles.iconBtn} hitSlop={10}>
+              <Ionicons name="share-outline" size={20} color="#111" />
+            </Pressable>
+            <Pressable 
+              style={styles.iconBtn} 
+              hitSlop={10}
+              onPress={() => toggleFav(item.id)}
+            >
+              <Ionicons 
+                name={favorites[item.id] ? "heart" : "heart-outline"} 
+                size={22} 
+                color={favorites[item.id] ? "#EF4444" : "#111"} 
+              />
+            </Pressable>
+          </View>
+        </View>
+
+        <View style={{ padding: 16 }}>
+          {/* Pillar chip */}
+          <PillarChip label={item.pillar} />
+          
+          {/* Title */}
+          <Text style={styles.cardTitle} numberOfLines={2}>
+            {item.title}
+          </Text>
+
+          {/* Meta info */}
+          <Text style={styles.cardMeta}>
+            {item.date} {item.time} • {item.venue}
+          </Text>
+
+          {/* Miles */}
+          {milesLine ? (
+            <Text style={styles.cardMeta}>
+              {milesLine}
+            </Text>
+          ) : null}
+
+          {/* CTA */}
+          <Pressable 
+            style={styles.cardCta}
+            onPress={navigateToEventDetail}
+          >
+            <Text style={styles.cardCtaText}>View for more details</Text>
+          </Pressable>
+        </View>
+      </Pressable>
+    );
+  };
+
+  /** -------------------------
+   * Tab wrapper components with GoalsSection
+   * ------------------------ */
+  const UpcomingTabWithGoals = () => (
+    <FlatList 
+      data={upcomingEvents}
+      keyExtractor={i => i.id}
+      renderItem={renderEvent}
+      ItemSeparatorComponent={() => <View style={{ height: 14 }} />}
+      contentContainerStyle={{ padding: 16, paddingTop: 8 }}
+      showsVerticalScrollIndicator={false}
+      style={{ flex: 1 }}
+      ListHeaderComponent={() => (
+        !goalsBannerDismissed ? (
+          <View style={{ marginBottom: 16 }}>
+            <GoalsSection 
+              onGoalPress={handleGoalPress} 
+              onDismiss={handleGoalsBannerDismiss}
+            />
+          </View>
+        ) : null
+      )}
+      ListEmptyComponent={() => (
+        <View style={styles.emptyState}>
+          <Ionicons name="search-outline" size={48} color="#9CA3AF" />
+          <Text style={styles.emptyStateTitle}>No upcoming gigs</Text>
+          <Text style={styles.emptyStateSubtitle}>
+            Try adjusting your filters or check back later
+          </Text>
+        </View>
+      )}
+    />
+  );
+
+  const PastTabWithGoals = () => (
+    <FlatList 
+      data={pastEvents}
+      keyExtractor={i => i.id}
+      renderItem={({ item }) => (
+        <View style={styles.card}>
+          <View style={{ padding: 16 }}>
+            <PillarChip label={item.pillar} />
+            <Text style={styles.cardTitle}>{item.title}</Text>
+            <Text style={styles.cardMeta}>
+              {item.date} {item.time} • {item.venue}
+            </Text>
+          </View>
+        </View>
+      )}
+      ItemSeparatorComponent={() => <View style={{ height: 14 }} />}
+      contentContainerStyle={{ padding: 16, paddingTop: 8 }}
+      showsVerticalScrollIndicator={false}
+      style={{ flex: 1 }}
+      ListHeaderComponent={() => (
+        !goalsBannerDismissed ? (
+          <View style={{ marginBottom: 16 }}>
+            <GoalsSection 
+              onGoalPress={handleGoalPress} 
+              onDismiss={handleGoalsBannerDismiss}
+            />
+          </View>
+        ) : null
+      )}
+      ListEmptyComponent={() => (
+        <View style={styles.emptyState}>
+          <Ionicons name="search-outline" size={48} color="#9CA3AF" />
+          <Text style={styles.emptyStateTitle}>No past gigs</Text>
+          <Text style={styles.emptyStateSubtitle}>
+            Gigs you've applied to will appear here
+          </Text>
+        </View>
+      )}
+    />
+  );
+
+  const InvitesTabWithGoals = () => (
+    <FlatList 
+      data={inviteEvents}
+      keyExtractor={i => i.id}
+      renderItem={({ item }) => (
+        <View style={styles.card}>
+          <View style={{ padding: 16 }}>
+            <PillarChip label={item.pillar} />
+            <Text style={styles.cardTitle}>{item.title}</Text>
+            <Text style={styles.cardMeta}>
+              {item.date} {item.time} • {item.venue}
+            </Text>
+          </View>
+        </View>
+      )}
+      ItemSeparatorComponent={() => <View style={{ height: 14 }} />}
+      contentContainerStyle={{ padding: 16, paddingTop: 8 }}
+      showsVerticalScrollIndicator={false}
+      style={{ flex: 1 }}
+      ListHeaderComponent={() => (
+        !goalsBannerDismissed ? (
+          <View style={{ marginBottom: 16 }}>
+            <GoalsSection 
+              onGoalPress={handleGoalPress} 
+              onDismiss={handleGoalsBannerDismiss}
+            />
+          </View>
+        ) : null
+      )}
+      ListEmptyComponent={() => (
+        <View style={styles.emptyState}>
+          <Ionicons name="search-outline" size={48} color="#9CA3AF" />
+          <Text style={styles.emptyStateTitle}>No invites</Text>
+          <Text style={styles.emptyStateSubtitle}>
+            Invitations from promoters will appear here
+          </Text>
+        </View>
+      )}
+    />
+  );
+
+  const MyEventsTabWithGoals = () => (
+    <View style={{ flex: 1 }}>
+      {!goalsBannerDismissed && (
+        <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16 }}>
+          <GoalsSection 
+            onGoalPress={handleGoalPress} 
+            onDismiss={handleGoalsBannerDismiss}
+          />
+        </View>
+      )}
+      <View style={styles.myEventsEmptyState}>
+        <Ionicons name="calendar-outline" size={48} color="#9CA3AF" />
+        <Text style={styles.emptyStateTitle}>No events yet</Text>
+        <Text style={styles.emptyStateSubtitle}>
+          "No events yet — create your first one!"
+        </Text>
+      </View>
+    </View>
+  );
+
+  const CandidatesTabWithGoals = () => (
+    <View style={{ flex: 1 }}>
+      {!goalsBannerDismissed && (
+        <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16 }}>
+          <GoalsSection 
+            onGoalPress={handleGoalPress} 
+            onDismiss={handleGoalsBannerDismiss}
+          />
+        </View>
+      )}
+      <View style={styles.emptyState}>
+        <Ionicons name="people-outline" size={48} color="#9CA3AF" />
+        <Text style={styles.emptyStateTitle}>No candidates yet</Text>
+        <Text style={styles.emptyStateSubtitle}>
+          Candidates will appear here when they apply to your events.
+        </Text>
+      </View>
+    </View>
+  );
+
+  const PastEventsTabWithGoals = () => {
+    const router = useRouter();
+    
+    // Always show mock past events (IDs 7-12) for dummy data visibility
+    const pastEvents = MOCK_EVENTS.filter(event => {
+      const isPastEvent = ['7', '8', '9', '10', '11', '12'].includes(event.id);
+      console.log(`Event ${event.id}: ${event.title} - isPastEvent: ${isPastEvent}`);
+      return isPastEvent;
+    });
+    
+    console.log(`PastEventsTab: Found ${pastEvents.length} past events`);
+
+    const renderPastEvent = ({ item }: { item: EventItem }) => (
+      <Pressable 
+        style={styles.card} 
+        onPress={() => {
+          router.push({
+            pathname: '/screen/eventdetail',
+            params: {
+              title: item.title,
+              dateLine: `${item.date} • ${item.time}`,
+              venue: item.venue,
+              priceText: `Gig Price: ${item.priceFrom}`,
+              city: item.venue,
+            }
+          });
+        }}
+      >
+        {/* Event Image */}
+        <Image
+          source={{ uri: 'https://picsum.photos/seed/' + item.id + '/400/200' }}
+          style={styles.cardImage}
+          resizeMode="cover"
+        />
+        
+        {/* Category Pillar */}
+        <View style={styles.cardActions}>
+          <PillarChip label={item.pillar} />
+        </View>
+        
+        {/* Posted Badge */}
+        <View style={styles.postedBadge}>
+          <Text style={styles.postedText}>Posted</Text>
+        </View>
+        
+        {/* Event Details */}
+        <View style={{ padding: 16 }}>
+          <Text style={styles.cardTitle}>{item.title}</Text>
+          <Text style={styles.cardMeta}>
+            {item.date} {item.time} • {item.venue}
+          </Text>
+          <Text style={styles.cardMeta}>
+            {item.distanceMi.toFixed(1)} miles away
+          </Text>
+        </View>
+      </Pressable>
+    );
+
+    return (
+      <FlatList 
+        data={pastEvents}
+        keyExtractor={i => i.id}
+        renderItem={renderPastEvent}
+        ItemSeparatorComponent={() => <View style={{ height: 14 }} />}
+        contentContainerStyle={{ padding: 16, paddingTop: 8 }}
+        showsVerticalScrollIndicator={false}
+        style={{ flex: 1 }}
+        ListHeaderComponent={() => (
+          !goalsBannerDismissed ? (
+            <View style={{ marginBottom: 16 }}>
+              <GoalsSection 
+                onGoalPress={handleGoalPress} 
+                onDismiss={handleGoalsBannerDismiss}
+              />
+            </View>
+          ) : null
+        )}
+        ListEmptyComponent={() => (
+          <View style={styles.emptyState}>
+            <Ionicons name="calendar-outline" size={48} color="#9CA3AF" />
+            <Text style={styles.emptyStateTitle}>No past events</Text>
+            <Text style={styles.emptyStateSubtitle}>
+              Your past events will appear here once they're completed.
+            </Text>
+          </View>
+        )}
+      />
+    );
+  };
+
+  /** -------------------------
    * Sticky search header
    * ------------------------ */
   const StickySearchBar = () => (
@@ -654,27 +660,9 @@ export default function GigScreen() {
         <StickySearchBar />
       </View>
 
-      {/* Main content using FlatList to restore scrolling */}
-      <FlatList
-        data={[]} // Empty data since we're using ListHeaderComponent
-        keyExtractor={() => 'header'}
-        renderItem={() => null}
-        showsVerticalScrollIndicator={false}
-        style={styles.container}
-        contentContainerStyle={styles.scrollContent}
-        ListHeaderComponent={() => (
-          <View>
-            {/* Goals Section */}
-            {!goalsBannerDismissed && (
-              <GoalsSection 
-                onGoalPress={handleGoalPress} 
-                onDismiss={handleGoalsBannerDismiss}
-              />
-            )}
-
-            {/* Tab content area */}
-            <View style={styles.tabContentArea}>
-              <Tab.Navigator
+      {/* Tab content area */}
+      <View style={styles.tabContentArea}>
+                      <Tab.Navigator
                 screenOptions={{
                   tabBarStyle: styles.tabBar,
                   tabBarLabelStyle: styles.tabLabel,
@@ -685,22 +673,19 @@ export default function GigScreen() {
               >
                 {role === 'talent' ? (
                   <>
-                    <Tab.Screen name="Upcoming" component={UpcomingTab} />
-                    <Tab.Screen name="Past" component={PastTab} />
-                    <Tab.Screen name="Invites" component={InvitesTab} />
+                    <Tab.Screen name="Upcoming" component={UpcomingTabWithGoals} />
+                    <Tab.Screen name="Past" component={PastTabWithGoals} />
+                    <Tab.Screen name="Invites" component={InvitesTabWithGoals} />
                   </>
                 ) : (
                   <>
-                    <Tab.Screen name="My Events" component={MyEventsTab} />
-                    <Tab.Screen name="Candidates" component={CandidatesTab} />
-                    <Tab.Screen name="Past Events" component={PastEventsTab} />
+                    <Tab.Screen name="My Events" component={MyEventsTabWithGoals} />
+                    <Tab.Screen name="Candidates" component={CandidatesTabWithGoals} />
+                    <Tab.Screen name="Past Events" component={PastEventsTabWithGoals} />
                   </>
                 )}
               </Tab.Navigator>
-            </View>
-          </View>
-        )}
-      />
+      </View>
 
       <PickLocationSheet 
         visible={pickVisible}
@@ -767,7 +752,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: BG,
-    marginTop: 80, // Add margin to account for sticky header
   },
   stickyWrap: {
     backgroundColor: BG,
@@ -775,11 +759,6 @@ const styles = StyleSheet.create({
     paddingBottom: 0,
     // make sure it sits above scrolling content
     zIndex: 10,
-    elevation: 6, // Android shadow
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
   },
   searchRow: {
     flexDirection: 'row',
@@ -838,11 +817,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 10,
-    elevation: 6,
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
   },
   scrollContent: {
     paddingTop: 80, // Reduced spacing between header and content
@@ -855,14 +829,18 @@ const styles = StyleSheet.create({
   },
   tabContentArea: {
     flex: 1,
+    marginTop: 80, // Add margin to account for sticky header
   },
   body: { paddingHorizontal: 16, paddingTop: 0, paddingBottom: 0, marginBottom: 0 },
 
   // Tab bar styles
   tabBar: {
     backgroundColor: '#fff',
-    elevation: 0,
-    shadowOpacity: 0,
+    elevation: 6, // Android shadow
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
     marginTop: 0,

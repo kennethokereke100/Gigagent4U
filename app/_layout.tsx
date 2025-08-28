@@ -4,13 +4,16 @@ import 'react-native-url-polyfill/auto';
 
 import { Stack } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { UserLocationProvider } from '../contexts/UserLocationContext';
 import { UserRoleProvider } from '../contexts/UserRoleContext';
 
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <UserRoleProvider>
-        <Stack screenOptions={{ headerShown: false }} />
+        <UserLocationProvider>
+          <Stack screenOptions={{ headerShown: false }} />
+        </UserLocationProvider>
       </UserRoleProvider>
     </GestureHandlerRootView>
   );
