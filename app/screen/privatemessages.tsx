@@ -39,16 +39,16 @@ export default function PrivateMessages() {
   const data = useMemo(() => MOCK, []);
 
   const onOpenThread = (t: { name: string; initials: string }) => {
-    router.push(`/screen/message?fromScreen=privatemessages&name=${encodeURIComponent(t.name)}&initials=${t.initials}`);
+    router.push(`/screen/Message?fromScreen=privatemessages&name=${encodeURIComponent(t.name)}&initials=${t.initials}`);
   };
 
   const onCompose = () => {
-    router.push('/screen/message?fromScreen=privatemessages');
+    router.push('/screen/Message?fromScreen=privatemessages');
   };
 
   const onBack = () => {
     // Always navigate back to gig.tsx inside the gigagent folder
-    router.push('/screen/eventlist');
+    router.push('/screen/Eventlist');
   };
 
   const renderItem = ({ item }: { item: Thread }) => (

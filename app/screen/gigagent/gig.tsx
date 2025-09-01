@@ -523,7 +523,7 @@ export default function GigScreen() {
         style={styles.card} 
         onPress={() => {
           router.push({
-            pathname: '/screen/eventdetail',
+            pathname: '/screen/Eventdetail',
             params: {
               title: item.title,
               dateLine: `${item.date} • ${item.time}`,
@@ -631,7 +631,7 @@ export default function GigScreen() {
         </Pressable>
 
         {/* Messages */}
-        <Pressable onPress={() => router.push('/screen/privatemessages')} style={styles.iconBtn}>
+        <Pressable onPress={() => router.push('/screen/Privatemessages')} style={styles.iconBtn}>
           <Ionicons name="chatbubble-ellipses-outline" size={22} color="#111" />
         </Pressable>
       </View>

@@ -286,7 +286,7 @@ export default function QuestionsScreen() {
                 if (role) {
                   setUserRole(role.toLowerCase() as 'talent' | 'promoter');
                 }
-                router.push('/screen/locationsearch');
+                router.push('/screen/Locationsearch');
               }}
               style={({ pressed }) => [
                 styles.cta,

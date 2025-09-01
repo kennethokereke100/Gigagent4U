@@ -1,7 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import BottomSheetAddressPicker from '../../components/BottomSheetAddressPicker';
 import DateRangePicker from '../../components/DateRangePicker';
+import GigHourlySheet from '../../components/GigHourlySheet';
 import PhotoUpload from '../../components/PhotoUpload';
 import TimePicker from '../../components/TimePicker';
 import { useUserLocation } from '../../contexts/UserLocationContext';
@@ -15,12 +17,15 @@ export default function CreateEvent({ onPost }: CreateEventProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [address, setAddress] = useState('');
+  const [contactInfo, setContactInfo] = useState('');
+  const [gigGroupName, setGigGroupName] = useState('');
+  const [hourlyAmount, setHourlyAmount] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [time, setTime] = useState('');
   const [photoUri, setPhotoUri] = useState('');
-  const [locationSheetVisible, setLocationSheetVisible] = useState(false);
   const [addressSheetVisible, setAddressSheetVisible] = useState(false);
+  const [hourlySheetVisible, setHourlySheetVisible] = useState(false);
 
   const handleDateRangeSelect = (start: string, end: string) => {
     setStartDate(start);
@@ -29,6 +34,16 @@ export default function CreateEvent({ onPost }: CreateEventProps) {
 
   const handlePhotoSelect = (uri: string) => {
     setPhotoUri(uri);
+  };
+
+  const handleAddressSelect = (selectedAddress: string) => {
+    setAddress(selectedAddress);
+    setAddressSheetVisible(false);
+  };
+
+  const handleHourlyAmountSelect = (amount: string) => {
+    setHourlyAmount(amount);
+    setHourlySheetVisible(false);
   };
 
   const handlePost = () => {
@@ -42,6 +57,9 @@ export default function CreateEvent({ onPost }: CreateEventProps) {
       title: title.trim(),
       description: description.trim(),
       address: address.trim(),
+      contactInfo: contactInfo.trim(),
+      gigGroupName: gigGroupName.trim(),
+      hourlyAmount: hourlyAmount.trim(),
       startDate,
       endDate,
       time,
@@ -50,7 +68,7 @@ export default function CreateEvent({ onPost }: CreateEventProps) {
       mediaType: 'photo',
       postedAt: new Date().toISOString(),
       pillar: 'Event', // Default category
-      priceFrom: '$0', // Default price
+      priceFrom: hourlyAmount || '$0', // Use hourly amount if set
       venue: locationString,
       distanceMi: 0, // Will be calculated based on user location
       startsAt: new Date().toISOString(), // Will be calculated from date/time
@@ -61,202 +79,174 @@ export default function CreateEvent({ onPost }: CreateEventProps) {
   };
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {/* Photo Upload Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Showcase your event</Text>
-        <Text style={styles.sectionDescription}>
-          Upload a cover photo to highlight your event
-        </Text>
-        <PhotoUpload 
-          onSelect={handlePhotoSelect}
-          placeholder="Upload photo"
-          value={photoUri}
-        />
-      </View>
-
-      {/* Event Info Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Event Info</Text>
-        
-        {/* Title Field */}
-        <View style={styles.fieldContainer}>
-          <Text style={styles.fieldLabel}>Gig title</Text>
-          <TextInput
-            style={styles.textInput}
-            value={title}
-            onChangeText={setTitle}
-            placeholder="Enter event title"
-            placeholderTextColor="#9CA3AF"
+    <View style={styles.container}>
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        {/* Photo Upload Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Showcase your event</Text>
+          <Text style={styles.sectionDescription}>
+            Upload a cover photo to highlight your event
+          </Text>
+          <PhotoUpload 
+            onSelect={handlePhotoSelect}
+            placeholder="Upload photo"
+            value={photoUri}
           />
         </View>
 
-        {/* Description Field */}
-        <View style={styles.fieldContainer}>
-          <Text style={styles.fieldLabel}>Gig description</Text>
-          <TextInput
-            style={[styles.textInput, styles.textArea]}
-            value={description}
-            onChangeText={setDescription}
-            placeholder="Tell us about your event and what makes it special, such as the type of event or your experience in organizing similar events."
-            placeholderTextColor="#9CA3AF"
-            multiline
-            numberOfLines={4}
-            maxLength={500}
-          />
-          <Text style={styles.characterCount}>{description.length}/500</Text>
+        {/* Event Info Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Event Info</Text>
+          
+          {/* Title Field */}
+          <View style={styles.fieldContainer}>
+            <Text style={styles.fieldLabel}>Gig title</Text>
+            <TextInput
+              style={styles.textInput}
+              value={title}
+              onChangeText={setTitle}
+              placeholder="Enter event title"
+              placeholderTextColor="#9CA3AF"
+            />
+          </View>
+
+          {/* Description Field */}
+          <View style={styles.fieldContainer}>
+            <Text style={styles.fieldLabel}>Gig description</Text>
+            <TextInput
+              style={[styles.textInput, styles.textArea]}
+              value={description}
+              onChangeText={setDescription}
+              placeholder="Tell us about your event and what makes it special, such as the type of event or your experience in organizing similar events."
+              placeholderTextColor="#9CA3AF"
+              multiline
+              numberOfLines={4}
+              maxLength={500}
+            />
+            <Text style={styles.characterCount}>{description.length}/500</Text>
+          </View>
+
+          {/* Address Field - Now the source of truth for location */}
+          <View style={styles.fieldContainer}>
+            <Text style={styles.fieldLabel}>Address</Text>
+            <Pressable 
+              style={styles.addressInput}
+              onPress={() => setAddressSheetVisible(true)}
+            >
+              {address && (
+                <Ionicons name="location" size={16} color="#6B7280" style={styles.addressIcon} />
+              )}
+              <Text style={[styles.addressInputText, !address && styles.placeholder]}>
+                {address || "Enter address"}
+              </Text>
+              <Ionicons name="chevron-forward" size={18} color="#6B7280" />
+            </Pressable>
+          </View>
+
+          {/* Contact Info Field */}
+          <View style={styles.fieldContainer}>
+            <Text style={styles.fieldLabel}>Contact Info</Text>
+            <TextInput
+              style={styles.textInput}
+              value={contactInfo}
+              onChangeText={setContactInfo}
+              placeholder="(123) 456-7890"
+              placeholderTextColor="#9CA3AF"
+              keyboardType="phone-pad"
+            />
+          </View>
+
+          {/* Gig Group Name Field */}
+          <View style={styles.fieldContainer}>
+            <Text style={styles.fieldLabel}>Gig Group Name</Text>
+            <View style={styles.groupNameContainer}>
+              <TextInput
+                style={[styles.textInput, styles.groupNameInput]}
+                value={gigGroupName}
+                onChangeText={setGigGroupName}
+                placeholder="Enter group name"
+                placeholderTextColor="#9CA3AF"
+              />
+              <Pressable 
+                style={styles.infoIcon}
+                onPress={() => console.log("Gig Group info clicked")}
+                hitSlop={8}
+              >
+                <Ionicons name="information-circle-outline" size={20} color="#6B7280" />
+              </Pressable>
+            </View>
+          </View>
         </View>
 
-        {/* Address Field */}
-        <View style={styles.fieldContainer}>
-          <Text style={styles.fieldLabel}>Address</Text>
+        {/* Date and Time Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Date and Time</Text>
+          
+          {/* Date Range Picker */}
+          <View style={styles.fieldContainer}>
+            <Text style={styles.fieldLabel}>Date Range</Text>
+            <DateRangePicker
+              startDate={startDate}
+              endDate={endDate}
+              onSelect={handleDateRangeSelect}
+              placeholder="Select start and end dates"
+            />
+          </View>
+
+          {/* Time Picker */}
+          <View style={styles.fieldContainer}>
+            <Text style={styles.fieldLabel}>Time</Text>
+            <TimePicker
+              value={time}
+              onSelect={setTime}
+              placeholder="Select time"
+            />
+          </View>
+        </View>
+
+        {/* Gig Hourly Amount Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Gig Hourly Amount</Text>
           <Pressable 
             style={styles.addressInput}
-            onPress={() => setAddressSheetVisible(true)}
+            onPress={() => setHourlySheetVisible(true)}
           >
-            <Text style={[styles.addressInputText, !address && styles.placeholder]}>
-              {address || "Enter address"}
+            {hourlyAmount && (
+              <Ionicons name="cash-outline" size={16} color="#6B7280" style={styles.addressIcon} />
+            )}
+            <Text style={[styles.addressInputText, !hourlyAmount && styles.placeholder]}>
+              {hourlyAmount || "Enter hourly amount"}
             </Text>
             <Ionicons name="chevron-forward" size={18} color="#6B7280" />
           </Pressable>
         </View>
 
-        {/* Event Location Field */}
-        <View style={styles.fieldContainer}>
-          <Text style={styles.fieldLabel}>Event Location</Text>
-          
-          {/* Location Pill */}
-          <View style={styles.locationPill}>
-            <Ionicons name="location-sharp" size={18} color="#6B7280" />
-            <Ionicons name="map" size={16} color="#6B7280" style={{ marginLeft: 4 }} />
-            <Text style={styles.locationPillText}>
-              {city && state ? `${city}, ${state}` : city || "No location selected"}
-            </Text>
-          </View>
-          
-          {/* Change Location Button */}
+        {/* Post Button */}
+        <View style={styles.section}>
           <Pressable 
-            style={styles.changeLocationButton}
-            onPress={() => setLocationSheetVisible(true)}
+            style={[styles.postButton, !title.trim() && styles.postButtonDisabled]} 
+            onPress={handlePost}
+            disabled={!title.trim()}
           >
-            <Text style={styles.changeLocationText}>Change location</Text>
+            <Text style={styles.postButtonText}>Post</Text>
           </Pressable>
         </View>
-      </View>
+      </ScrollView>
 
-      {/* Date and Time Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Date and Time</Text>
-        
-        {/* Date Range Picker */}
-        <View style={styles.fieldContainer}>
-          <Text style={styles.fieldLabel}>Date Range</Text>
-          <DateRangePicker
-            startDate={startDate}
-            endDate={endDate}
-            onSelect={handleDateRangeSelect}
-            placeholder="Select start and end dates"
-          />
-        </View>
-
-        {/* Time Picker */}
-        <View style={styles.fieldContainer}>
-          <Text style={styles.fieldLabel}>Time</Text>
-          <TimePicker
-            value={time}
-            onSelect={setTime}
-            placeholder="Select time"
-          />
-        </View>
-      </View>
-
-
-
-      {/* Post Button */}
-      <View style={styles.section}>
-        <Pressable 
-          style={[styles.postButton, !title.trim() && styles.postButtonDisabled]} 
-          onPress={handlePost}
-          disabled={!title.trim()}
-        >
-          <Text style={styles.postButtonText}>Post</Text>
-        </Pressable>
-      </View>
-      
-      {/* Location Bottom Sheet */}
-      <Modal
-        visible={locationSheetVisible}
-        transparent
-        animationType="slide"
-      >
-        <Pressable 
-          style={styles.modalOverlay}
-          onPress={() => setLocationSheetVisible(false)}
-        >
-          <Pressable 
-            style={styles.modalContent}
-            onPress={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <View style={styles.modalHeader}>
-              <Pressable onPress={() => setLocationSheetVisible(false)}>
-                <Text style={styles.headerButton}>Cancel</Text>
-              </Pressable>
-              <Text style={styles.modalTitle}>Change Location</Text>
-              <View style={{ width: 60 }} />
-            </View>
-            
-            {/* Content - Empty for now */}
-            <View style={styles.modalBody}>
-              <Text style={styles.modalBodyText}>
-                Location picker will be implemented here
-              </Text>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      {/* Address Bottom Sheet */}
-      <Modal
+      {/* Address Bottom Sheet - Now the only location picker */}
+      <BottomSheetAddressPicker
         visible={addressSheetVisible}
-        transparent
-        animationType="slide"
-      >
-        <Pressable 
-          style={styles.modalOverlay}
-          onPress={() => setAddressSheetVisible(false)}
-        >
-          <Pressable 
-            style={[styles.modalContent, { height: '55%' }]}
-            onPress={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <View style={styles.modalHeader}>
-              <Pressable onPress={() => setAddressSheetVisible(false)}>
-                <Text style={styles.headerButton}>Cancel</Text>
-              </Pressable>
-              <Text style={styles.modalTitle}>Select Address</Text>
-              <View style={{ width: 60 }} />
-            </View>
-            
-            {/* Search Bar */}
-            <View style={styles.searchBarContainer}>
-              <View style={styles.searchBar}>
-                <Ionicons name="search" size={18} color="#6B7280" />
-                <Text style={styles.searchBarPlaceholder}>Search Baltimore addresses...</Text>
-              </View>
-            </View>
-            
-            {/* Content - Empty for now */}
-            <View style={styles.modalBody}>
-              <Text style={styles.modalBodyText}>
-                Address picker will be implemented here
-              </Text>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
-    </ScrollView>
+        onClose={() => setAddressSheetVisible(false)}
+        onSelectAddress={handleAddressSelect}
+      />
+
+      {/* Gig Hourly Amount Bottom Sheet */}
+      <GigHourlySheet
+        visible={hourlySheetVisible}
+        onClose={() => setHourlySheetVisible(false)}
+        onSelectAmount={handleHourlyAmountSelect}
+      />
+    </View>
   );
 }
 
@@ -264,6 +254,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
+  },
+  scrollView: {
+    flex: 1,
   },
   section: {
     paddingHorizontal: 20,
@@ -314,7 +307,17 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
   },
-
+  groupNameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  groupNameInput: {
+    flex: 1,
+    marginRight: 8,
+  },
+  infoIcon: {
+    padding: 4,
+  },
   postButton: {
     backgroundColor: '#111',
     borderRadius: 8,
@@ -329,33 +332,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#fff',
-  },
-  locationPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    backgroundColor: '#F9FAFB',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 8,
-    gap: 8,
-  },
-  locationPillText: {
-    fontSize: 16,
-    color: '#111',
-    flex: 1,
-  },
-  changeLocationButton: {
-    marginTop: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    alignSelf: 'flex-start',
-  },
-  changeLocationText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#007AFF',
   },
   addressInput: {
     flexDirection: 'row',
@@ -376,66 +352,7 @@ const styles = StyleSheet.create({
   placeholder: {
     color: '#9CA3AF',
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingBottom: 40,
-    maxHeight: '80%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111',
-  },
-  headerButton: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#007AFF',
-  },
-  modalBody: {
-    padding: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 200,
-  },
-  modalBodyText: {
-    fontSize: 16,
-    color: '#6B7280',
-    textAlign: 'center',
-  },
-  searchBarContainer: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F9FAFB',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    gap: 8,
-  },
-  searchBarPlaceholder: {
-    fontSize: 16,
-    color: '#9CA3AF',
-    flex: 1,
+  addressIcon: {
+    marginRight: 8,
   },
 });

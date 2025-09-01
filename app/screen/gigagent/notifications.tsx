@@ -54,11 +54,11 @@ export default function NotificationsScreen() {
     switch (notification.type) {
       case 'gig_invite':
         // Navigate to eventlist screen with gigs tab active
-        router.push('/screen/eventlist?activeTab=gigs');
+        router.push('/screen/Eventlist?activeTab=gigs');
         break;
       case 'message':
         // Navigate to message with fromScreen parameter
-        router.push(`/screen/message?fromScreen=notifications&name=${encodeURIComponent('King Slaine (Promoter)')}&initials=KS`);
+        router.push(`/screen/Message?fromScreen=notifications&name=${encodeURIComponent('King Slaine (Promoter)')}&initials=KS`);
         break;
     }
   };
@@ -68,11 +68,11 @@ export default function NotificationsScreen() {
     switch (notification.type) {
       case 'gig_invite':
         // Navigate to eventlist screen with gigs tab active
-        router.push('/screen/eventlist?activeTab=gigs');
+        router.push('/screen/Eventlist?activeTab=gigs');
         break;
       case 'message':
         // Navigate to message with fromScreen parameter
-        router.push(`/screen/message?fromScreen=notifications&name=${encodeURIComponent('King Slaine (Promoter)')}&initials=KS`);
+        router.push(`/screen/Message?fromScreen=notifications&name=${encodeURIComponent('King Slaine (Promoter)')}&initials=KS`);
         break;
     }
   };

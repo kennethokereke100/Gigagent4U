@@ -1,13 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
 import {
-    Alert,
-    Modal,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
+  Alert,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
 
 interface TimePickerProps {
@@ -28,16 +28,31 @@ const ampm = ['AM', 'PM'];
 export default function TimePicker({ value, onSelect, placeholder = "Time" }: TimePickerProps) {
   const [modalVisible, setModalVisible] = useState(false);
   const [hasBeenOpened, setHasBeenOpened] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
   
-  // From time state - default to 01:00 PM
+  // From time state - default to 1:00 AM
   const [fromHour, setFromHour] = useState<string>('1');
   const [fromMinute, setFromMinute] = useState<string>('00');
-  const [fromAmPm, setFromAmPm] = useState<string>('PM');
+  const [fromAmPm, setFromAmPm] = useState<string>('AM');
   
-  // To time state - default to 01:00 PM
+  // To time state - default to 1:00 PM
   const [toHour, setToHour] = useState<string>('1');
   const [toMinute, setToMinute] = useState<string>('00');
   const [toAmPm, setToAmPm] = useState<string>('PM');
+
+  // Initialize with default values on first render
+  useEffect(() => {
+    if (!isInitialized) {
+      // Set default values: 1:00 AM to 1:00 PM
+      setFromHour('1');
+      setFromMinute('00');
+      setFromAmPm('AM');
+      setToHour('1');
+      setToMinute('00');
+      setToAmPm('PM');
+      setIsInitialized(true);
+    }
+  }, [isInitialized]);
 
   // Parse existing value when component mounts or value changes
   useEffect(() => {
@@ -110,9 +125,10 @@ export default function TimePicker({ value, onSelect, placeholder = "Time" }: Ti
   };
 
   const handleClear = () => {
+    // Reset to default values: 1:00 AM to 1:00 PM
     setFromHour('1');
     setFromMinute('00');
-    setFromAmPm('PM');
+    setFromAmPm('AM');
     setToHour('1');
     setToMinute('00');
     setToAmPm('PM');

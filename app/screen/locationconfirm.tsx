@@ -33,7 +33,7 @@ export default function LocationConfirm() {
         </View>
 
         <Pressable
-          onPress={() => router.replace('/screen/eventlist')}
+          onPress={() => router.replace('/screen/Eventlist')}
           style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}
         >
           <Text style={styles.ctaText}>Continue</Text>

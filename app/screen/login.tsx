@@ -163,7 +163,7 @@ export default function LoginScreen() {
         <Animated.View pointerEvents="box-none" style={[styles.ctaWrap, { paddingBottom: bottomOffset }]}>
           <Pressable
             disabled={!isValidEmail}
-            onPress={() => router.push({ pathname: '/screen/password', params: { email } })}
+            onPress={() => router.push({ pathname: '/screen/Password', params: { email } })}
             style={({ pressed }) => [
               styles.cta,
               !isValidEmail && styles.ctaDisabled,

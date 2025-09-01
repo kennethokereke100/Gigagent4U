@@ -176,7 +176,7 @@ export default function PasswordScreen() {
         <Animated.View pointerEvents="box-none" style={[styles.ctaWrap, { paddingBottom: bottomOffset }]}>
           <Pressable
             disabled={password.length === 0}
-            onPress={() => router.replace('/screen/register')}
+            onPress={() => router.replace('/screen/Register')}
             style={({ pressed }) => [
               styles.cta,
               password.length === 0 && styles.ctaDisabled,

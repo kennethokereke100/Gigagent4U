@@ -31,8 +31,8 @@ export default function LocationSearch() {
     return "Where are we going?";
   }, [role]);
 
-  const goToEventList = () => router.replace('/screen/eventlist');
-  const goToConfirm = (city: string) => router.push({ pathname: '/screen/locationconfirm', params: { city } });
+  const goToEventList = () => router.replace('/screen/Eventlist');
+  const goToConfirm = (city: string) => router.push({ pathname: '/screen/Locationconfirm', params: { city } });
 
   const onCurrentLocation = async () => {
     try {

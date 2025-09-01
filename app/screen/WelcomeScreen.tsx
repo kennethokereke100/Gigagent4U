@@ -1,21 +1,20 @@
+
 import { AntDesign, FontAwesome, Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React from "react";
 import { Pressable, SafeAreaView, StatusBar, StyleSheet, Text, View } from "react-native";
 
-export default function WelcomeScreen() {
+export default function welcomescreen() {
   const router = useRouter();
 
   const onEmail = () => {
-    router.push("/screen/login");
+    router.push("/screen/Login");
   };
   const onFacebook = () => {
-    // after successful continue/sign-in:
-    router.replace("/(tabs)"); // lands on your tab navigator without coming back to welcome
+    console.log("Facebook login pressed — TODO: implement navigation");
   };
   const onGoogle = () => {
-    // after successful continue/sign-in:
-    router.replace("/(tabs)"); // lands on your tab navigator without coming back to welcome
+    console.log("Google login pressed — TODO: implement navigation");
   };
   const onFindTickets = () => {};
 
@@ -130,5 +129,4 @@ const styles = StyleSheet.create({
     textDecorationLine: "underline"
   }
 });
-
 

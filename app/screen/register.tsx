@@ -169,7 +169,7 @@ export default function RegisterScreen() {
         <Animated.View pointerEvents="box-none" style={[styles.ctaWrap, { paddingBottom: bottomOffset }]}>
           <Pressable
             disabled={!canSubmit}
-            onPress={() => router.push('/screen/questions')}
+            onPress={() => router.push('/screen/Questions')}
             style={({ pressed }) => [
               styles.cta,
               !canSubmit && styles.ctaDisabled,
