@@ -31,6 +31,15 @@ export default function RootLayout() {
             <Stack.Screen name="screen/locationconfirm" options={{ title: 'Location Confirm' }} />
             <Stack.Screen name="screen/eventlist" options={{ title: 'Event List' }} />
             <Stack.Screen name="screen/eventdetail" options={{ title: 'Event Detail' }} />
+            <Stack.Screen 
+              name="screen/CreateEvent" 
+              options={{ 
+                title: 'Create Event',
+                presentation: 'modal', // animates upward like a bottom sheet
+              }} 
+            />
+            <Stack.Screen name="screen/previewpost" options={{ title: 'Preview Post' }} />
+            <Stack.Screen name="screen/eventdetailpreview" options={{ title: 'Event Detail Preview' }} />
             <Stack.Screen name="screen/groups" options={{ title: 'Groups' }} />
             <Stack.Screen name="screen/message" options={{ title: 'Message' }} />
             <Stack.Screen name="screen/privatemessages" options={{ title: 'Private Messages' }} />

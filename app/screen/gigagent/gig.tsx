@@ -5,20 +5,18 @@ import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-    FlatList,
-    Image,
-    Modal,
-    Pressable,
-    StyleSheet,
-    Text,
-    View
+  FlatList,
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  View
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import FilterBottomSheet from '../../../components/FilterBottomSheet';
 import PickLocationSheet from '../../../components/PickLocationSheet';
 import PillarChip from '../../../components/PillarChip';
 import { useUserRole } from '../../../contexts/UserRoleContext';
-import CreateEvent from '../../components/CreateEvent';
 import GoalsSection from '../../components/GoalsSection';
 
 const Tab = createMaterialTopTabNavigator();
@@ -137,8 +135,7 @@ export default function GigScreen() {
   // Track if goals banner is dismissed
   const [goalsBannerDismissed, setGoalsBannerDismissed] = useState(false);
   
-  // FAB and modal state
-  const [createEventVisible, setCreateEventVisible] = useState(false);
+
   
   // Determine if user is a promoter
   const isPromoter = role === 'promoter';
@@ -174,35 +171,9 @@ export default function GigScreen() {
     setGoalsBannerDismissed(true);
   };
 
-  // Handle FAB and bottom sheet
+  // Handle FAB press
   const handleFABPress = () => {
-    setCreateEventVisible(true);
-  };
-
-  const handleCloseCreateEvent = () => {
-    setCreateEventVisible(false);
-  };
-
-  const handleCreateEvent = (eventData: any) => {
-    // Add the new event to MOCK_EVENTS
-    const newEvent = {
-      ...eventData,
-      id: Date.now().toString(),
-      postedAt: new Date().toISOString(),
-      pillar: 'Event',
-      priceFrom: '$0',
-      venue: eventData.location,
-      distanceMi: 0,
-      startsAt: new Date().toISOString(),
-      endsAt: new Date().toISOString(),
-    };
-    
-    // In a real app, you would save this to a database
-    // For now, we'll just close the modal
-    setCreateEventVisible(false);
-    
-    // You could also update the MOCK_EVENTS array here
-    // MOCK_EVENTS.unshift(newEvent);
+    router.push('/screen/CreateEvent');
   };
 
 
@@ -724,22 +695,7 @@ export default function GigScreen() {
         </Pressable>
       )}
 
-      {/* Create Event Full-Screen Modal */}
-      <Modal visible={createEventVisible} animationType="slide">
-        <View style={styles.fullScreenModal}>
-          {/* Header */}
-          <View style={[styles.modalHeader, { paddingTop: insets.top }]}>
-            <Pressable onPress={handleCloseCreateEvent} hitSlop={10}>
-              <Ionicons name="close" size={24} color="#111" />
-            </Pressable>
-            <Text style={styles.modalTitle}>Create Event</Text>
-            <View style={{ width: 24 }} />
-          </View>
 
-          {/* Content */}
-          <CreateEvent onPost={handleCreateEvent} />
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 }
@@ -927,24 +883,5 @@ const styles = StyleSheet.create({
     zIndex: 1000,
   },
 
-  // Full-screen modal styles
-  fullScreenModal: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-    backgroundColor: '#fff',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111',
-  },
+
 });

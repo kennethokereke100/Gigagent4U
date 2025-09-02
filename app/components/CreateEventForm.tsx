@@ -1,31 +1,78 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState } from 'react';
+import * as React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import BottomSheetAddressPicker from '../../components/BottomSheetAddressPicker';
 import DateRangePicker from '../../components/DateRangePicker';
 import GigHourlySheet from '../../components/GigHourlySheet';
 import PhotoUpload from '../../components/PhotoUpload';
 import TimePicker from '../../components/TimePicker';
-import { useUserLocation } from '../../contexts/UserLocationContext';
 
-interface CreateEventProps {
-  onPost: (eventData: any) => void;
+interface CreateEventFormProps {
+  // Form values
+  title: string;
+  description: string;
+  address: string;
+  contactInfo: string;
+  gigGroupName: string;
+  hourlyAmount: string;
+  startDate: string;
+  endDate: string;
+  time: string;
+  photoUri: string;
+  
+  // State setters
+  setTitle: (value: string) => void;
+  setDescription: (value: string) => void;
+  setAddress: (value: string) => void;
+  setContactInfo: (value: string) => void;
+  setGigGroupName: (value: string) => void;
+  setHourlyAmount: (value: string) => void;
+  setStartDate: (value: string) => void;
+  setEndDate: (value: string) => void;
+  setTime: (value: string) => void;
+  setPhotoUri: (value: string) => void;
+  
+  // Bottom sheet states
+  addressSheetVisible: boolean;
+  hourlySheetVisible: boolean;
+  setAddressSheetVisible: (visible: boolean) => void;
+  setHourlySheetVisible: (visible: boolean) => void;
+  
+  // Form validation
+  isFormComplete: () => boolean;
+  
+  // Submit handler
+  onSubmit: () => void;
 }
 
-export default function CreateEvent({ onPost }: CreateEventProps) {
-  const { city, state } = useUserLocation();
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [address, setAddress] = useState('');
-  const [contactInfo, setContactInfo] = useState('');
-  const [gigGroupName, setGigGroupName] = useState('');
-  const [hourlyAmount, setHourlyAmount] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [time, setTime] = useState('');
-  const [photoUri, setPhotoUri] = useState('');
-  const [addressSheetVisible, setAddressSheetVisible] = useState(false);
-  const [hourlySheetVisible, setHourlySheetVisible] = useState(false);
+export default function CreateEventForm({
+  title,
+  description,
+  address,
+  contactInfo,
+  gigGroupName,
+  hourlyAmount,
+  startDate,
+  endDate,
+  time,
+  photoUri,
+  setTitle,
+  setDescription,
+  setAddress,
+  setContactInfo,
+  setGigGroupName,
+  setHourlyAmount,
+  setStartDate,
+  setEndDate,
+  setTime,
+  setPhotoUri,
+  addressSheetVisible,
+  hourlySheetVisible,
+  setAddressSheetVisible,
+  setHourlySheetVisible,
+  isFormComplete,
+  onSubmit
+}: CreateEventFormProps) {
 
   const handleDateRangeSelect = (start: string, end: string) => {
     setStartDate(start);
@@ -44,38 +91,6 @@ export default function CreateEvent({ onPost }: CreateEventProps) {
   const handleHourlyAmountSelect = (amount: string) => {
     setHourlyAmount(amount);
     setHourlySheetVisible(false);
-  };
-
-  const handlePost = () => {
-    if (!title.trim()) return; // Title is required
-    
-    // Create location string from context
-    const locationString = city && state ? `${city}, ${state}` : city || '';
-    
-    const eventData = {
-      id: Date.now().toString(),
-      title: title.trim(),
-      description: description.trim(),
-      address: address.trim(),
-      contactInfo: contactInfo.trim(),
-      gigGroupName: gigGroupName.trim(),
-      hourlyAmount: hourlyAmount.trim(),
-      startDate,
-      endDate,
-      time,
-      location: locationString,
-      photoUri,
-      mediaType: 'photo',
-      postedAt: new Date().toISOString(),
-      pillar: 'Event', // Default category
-      priceFrom: hourlyAmount || '$0', // Use hourly amount if set
-      venue: locationString,
-      distanceMi: 0, // Will be calculated based on user location
-      startsAt: new Date().toISOString(), // Will be calculated from date/time
-      endsAt: new Date().toISOString(), // Will be calculated from date/time
-    };
-    
-    onPost(eventData);
   };
 
   return (
@@ -224,11 +239,11 @@ export default function CreateEvent({ onPost }: CreateEventProps) {
         {/* Post Button */}
         <View style={styles.section}>
           <Pressable 
-            style={[styles.postButton, !title.trim() && styles.postButtonDisabled]} 
-            onPress={handlePost}
-            disabled={!title.trim()}
+            style={[styles.postButton, !isFormComplete() && styles.postButtonDisabled]}
+            disabled={!isFormComplete()}
+            onPress={onSubmit}
           >
-            <Text style={styles.postButtonText}>Post</Text>
+            <Text style={styles.postButtonText}>Preview Post</Text>
           </Pressable>
         </View>
       </ScrollView>
