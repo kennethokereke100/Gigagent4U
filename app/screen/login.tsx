@@ -1,4 +1,5 @@
 import { useRouter } from 'expo-router';
+import { fetchSignInMethodsForEmail } from 'firebase/auth';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
@@ -16,6 +17,9 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import ErrorOverlay from '../../components/ErrorOverlay';
+import { auth } from '../../firebaseConfig';
+import { getFriendlyErrorMessage } from '../../firebaseErrorMessages';
 
 const BG = '#F5F3F0';
 const CTA_SPACING = 12;
@@ -78,11 +82,36 @@ export default function LoginScreen() {
   const isTall = height > 700;
 
   const [email, setEmail] = useState('');
+  const [checking, setChecking] = useState(false);
+  const [errors, setErrors] = useState<string[]>([]);
+  const [exists, setExists] = useState(false);
 
   const isValidEmail = useMemo(
     () => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()),
     [email]
   );
+
+  const checkEmail = async () => {
+    if (!isValidEmail) return;
+    setChecking(true);
+    setErrors([]);
+    try {
+      const methods = await fetchSignInMethodsForEmail(auth, email.trim());
+      if (methods.length === 0) {
+        setExists(false);
+        const msg = getFriendlyErrorMessage("auth/user-not-found");
+        setErrors([msg]);
+      } else {
+        setExists(true);
+      }
+    } catch (err: any) {
+      console.error('Error checking email:', err.message);
+      const msg = getFriendlyErrorMessage(err.code);
+      setErrors([msg]);
+    } finally {
+      setChecking(false);
+    }
+  };
 
   const bottomOffset = useRef(new Animated.Value(insets.bottom + CTA_SPACING)).current;
   const formTranslateY = useRef(new Animated.Value(0)).current;
@@ -157,20 +186,35 @@ export default function LoginScreen() {
               placeholder="Enter Email Address"
               keyboardType="email-address"
             />
+
+            <Pressable onPress={() => router.push('/screen/Register')} style={styles.signupLink}>
+              <Text style={styles.signupText}>New User? Please sign up</Text>
+            </Pressable>
+
+            {/* ErrorOverlay shows above title */}
+            <ErrorOverlay
+              messages={errors}
+              onHide={() => setErrors([])}
+            />
           </Animated.View>
         </ScrollView>
 
         <Animated.View pointerEvents="box-none" style={[styles.ctaWrap, { paddingBottom: bottomOffset }]}>
           <Pressable
-            disabled={!isValidEmail}
-            onPress={() => router.push({ pathname: '/screen/Password', params: { email } })}
+            disabled={!isValidEmail || checking}
+            onPress={() => {
+              if (exists) {
+                router.push({ pathname: '/screen/Password', params: { email } });
+              }
+            }}
+            onPressIn={checkEmail}
             style={({ pressed }) => [
               styles.cta,
               !isValidEmail && styles.ctaDisabled,
               pressed && isValidEmail && styles.ctaPressed,
             ]}
           >
-            <Text style={styles.ctaText}>Next</Text>
+            <Text style={styles.ctaText}>{checking ? 'Checking...' : 'Next'}</Text>
           </Pressable>
         </Animated.View>
       </SafeAreaView>
@@ -203,6 +247,9 @@ const styles = StyleSheet.create({
     paddingTop: 22, // room for floating label
     paddingBottom: 12,
   },
+
+  signupLink: { marginTop: 8, alignItems: 'center' },
+  signupText: { color: '#111', fontSize: 14, textDecorationLine: 'underline' },
 
   ctaWrap: { position: 'absolute', left: 16, right: 16, bottom: 0 },
   cta: {

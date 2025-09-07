@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { signInWithEmailAndPassword } from "firebase/auth";
 import React, { useEffect, useRef, useState } from 'react';
 import {
     Animated,
@@ -17,6 +18,9 @@ import {
     useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import ErrorOverlay from '../../components/ErrorOverlay';
+import { auth } from "../../firebaseConfig";
+import { getFriendlyErrorMessage } from '../../firebaseErrorMessages';
 
 const BG = '#F5F3F0';
 const CTA_SPACING = 12;
@@ -95,6 +99,22 @@ export default function PasswordScreen() {
   const isTall = height > 700;
 
   const [password, setPassword] = useState('');
+  const [errors, setErrors] = useState<string[]>([]);
+
+  const handleSignIn = async () => {
+    if (!email || !password) return;
+    setErrors([]);
+
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      console.log("✅ Signed in");
+      router.replace("/screen/eventlist");
+    } catch (err: any) {
+      console.error("❌ Sign in error:", err.message);
+      const msg = getFriendlyErrorMessage(err.code);
+      setErrors([msg]);
+    }
+  };
 
   const bottomOffset = useRef(new Animated.Value(insets.bottom + CTA_SPACING)).current;
   const formTranslateY = useRef(new Animated.Value(0)).current;
@@ -170,13 +190,19 @@ export default function PasswordScreen() {
               secureTextEntry
               isPassword
             />
+
+            {/* ErrorOverlay shows above title */}
+            <ErrorOverlay
+              messages={errors}
+              onHide={() => setErrors([])}
+            />
           </Animated.View>
         </ScrollView>
 
         <Animated.View pointerEvents="box-none" style={[styles.ctaWrap, { paddingBottom: bottomOffset }]}>
           <Pressable
             disabled={password.length === 0}
-            onPress={() => router.replace('/screen/Register')}
+            onPress={handleSignIn}
             style={({ pressed }) => [
               styles.cta,
               password.length === 0 && styles.ctaDisabled,
@@ -225,6 +251,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     top: 10, // adjust for vertical centering if needed
   },
+
 
   ctaWrap: { position: 'absolute', left: 16, right: 16, bottom: 0 },
   cta: {

@@ -3,6 +3,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { onAuthStateChanged } from 'firebase/auth';
+import { collection, onSnapshot, orderBy, query, Timestamp } from 'firebase/firestore';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
@@ -13,10 +15,12 @@ import {
   View
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import AddEventBottomSheet from '../../../components/AddEventBottomSheet';
 import FilterBottomSheet from '../../../components/FilterBottomSheet';
 import PickLocationSheet from '../../../components/PickLocationSheet';
 import PillarChip from '../../../components/PillarChip';
 import { useUserRole } from '../../../contexts/UserRoleContext';
+import { auth, db } from '../../../firebaseConfig';
 import GoalsSection from '../../components/GoalsSection';
 
 const Tab = createMaterialTopTabNavigator();
@@ -26,6 +30,7 @@ const CARD = '#FFFFFF';
 const BORDER = '#E5E7EB';
 const TEXT = '#111';
 const MUTED = '#6B7280';
+const PLACEHOLDER_IMAGE = 'https://picsum.photos/seed/gigplaceholder/800/450';
 
 // Segmented control styling (match screenshot)
 const SEG_ACTIVE_BG = '#5B2331';     // maroon
@@ -58,6 +63,29 @@ type EventItem = {
   endsAt: string;
   applied?: boolean;
   invited?: boolean;
+  // Additional fields for user-created events
+  category?: string;
+  description?: string;
+  contactInfo?: string;
+  gigGroupName?: string;
+  photoUri?: string;
+  location?: string;
+  address?: string;
+  hourlyAmount?: string;
+  startDate?: string;
+  endDate?: string;
+  // Firestore fields
+  userId?: string;
+  type?: string;
+  photoUrl?: string;
+  contact?: string;
+  gigPrice?: number;
+  createdAt?: Timestamp;
+  // Google Event specific fields
+  categories?: string[];
+  venueName?: string;
+  venueAddress?: string;
+  venuePhoto?: string;
 };
 
 type City = { id: string; name: string; region?: string };
@@ -91,21 +119,7 @@ const parseEventDate = (dateStr: string): Date => {
   return eventDate;
 };
 
-const MOCK_EVENTS: EventItem[] = [
-  { id: '1', title: 'Looking for new wrestlers', date: 'July 24th', time: '6:00 – 8:00 PM EDT', venue: 'El Rio', priceFrom: '$17.85', miles: 4.5, pillar: 'Wrestlers', postedAt: '2025-01-10T16:20:00Z', distanceMi: 4.5, startsAt: '2025-07-24T18:00:00Z', endsAt: '2025-07-24T20:00:00Z', applied: true },
-  { id: '2', title: 'Looking for new wrestlers', date: 'July 24th', time: '6:00 – 8:00 PM EDT', venue: 'Main Room', priceFrom: '$12.00', miles: 2.1, pillar: 'Comedians', postedAt: '2025-01-10T10:30:00Z', distanceMi: 2.1, startsAt: '2025-07-24T19:00:00Z', endsAt: '2025-07-24T22:00:00Z', invited: true },
-  { id: '3', title: 'Boxing match referee needed', date: 'July 25th', time: '7:00 – 9:00 PM EDT', venue: 'Madison Square Garden', priceFrom: '$25.00', miles: 8.2, pillar: 'Referees', postedAt: '2025-01-10T08:15:00Z', distanceMi: 8.2, startsAt: '2025-07-25T19:00:00Z', endsAt: '2025-07-25T21:00:00Z' },
-  { id: '4', title: 'Ring announcer for local event', date: 'July 26th', time: '5:00 – 7:00 PM EDT', venue: 'Local Arena', priceFrom: '$15.50', miles: 12.5, pillar: 'Ring Announcers', postedAt: '2025-01-09T14:30:00Z', distanceMi: 12.5, startsAt: '2025-07-26T17:00:00Z', endsAt: '2025-07-26T19:00:00Z', applied: true },
-  { id: '5', title: 'Comedy open mic night', date: 'Aug 2nd', time: '7:00 – 10:00 PM EDT', venue: 'Comedy Club', priceFrom: '$8.00', miles: 42, pillar: 'Comedians', postedAt: '2025-01-08T12:00:00Z', distanceMi: 42, startsAt: '2025-08-02T19:00:00Z', endsAt: '2025-08-02T22:00:00Z' },
-  { id: '6', title: 'Regional boxing spar', date: 'Aug 9th', time: '5:00 – 8:00 PM EDT', venue: 'Boxing Gym', priceFrom: '$20.00', miles: 73, pillar: 'Boxers', postedAt: '2025-01-07T09:30:00Z', distanceMi: 73, startsAt: '2025-08-09T17:00:00Z', endsAt: '2025-08-09T20:00:00Z' },
-  // Past events
-  { id: '7', title: 'Wrestling match last week', date: 'Jan 5th', time: '7:00 – 9:00 PM EDT', venue: 'Old Arena', priceFrom: '$15.00', miles: 5.2, pillar: 'Wrestlers', postedAt: '2024-12-20T10:00:00Z', distanceMi: 5.2, startsAt: '2025-01-05T19:00:00Z', endsAt: '2025-01-05T21:00:00Z', applied: true },
-  { id: '8', title: 'Comedy show last month', date: 'Dec 15th', time: '8:00 – 10:00 PM EDT', venue: 'Comedy Club', priceFrom: '$10.00', miles: 3.1, pillar: 'Comedians', postedAt: '2024-11-25T14:00:00Z', distanceMi: 3.1, startsAt: '2024-12-15T20:00:00Z', endsAt: '2024-12-15T22:00:00Z', applied: true },
-  { id: '9', title: 'Boxing championship event', date: 'Dec 10th', time: '6:00 – 9:00 PM EDT', venue: 'Sports Complex', priceFrom: '$45.00', miles: 8.7, pillar: 'Boxers', postedAt: '2024-11-15T09:00:00Z', distanceMi: 8.7, startsAt: '2024-12-10T18:00:00Z', endsAt: '2024-12-10T21:00:00Z' },
-  { id: '10', title: 'Ring announcer needed', date: 'Nov 28th', time: '7:00 – 8:30 PM EDT', venue: 'Local Gym', priceFrom: '$18.00', miles: 2.3, pillar: 'Ring Announcers', postedAt: '2024-11-10T16:30:00Z', distanceMi: 2.3, startsAt: '2024-11-28T19:00:00Z', endsAt: '2024-11-28T20:30:00Z' },
-  { id: '11', title: 'Comedy open mic night', date: 'Nov 20th', time: '8:00 – 11:00 PM EDT', venue: 'Laugh Factory', priceFrom: '$12.00', miles: 6.1, pillar: 'Comedians', postedAt: '2024-11-05T12:00:00Z', distanceMi: 6.1, startsAt: '2024-11-20T20:00:00Z', endsAt: '2024-11-20T23:00:00Z' },
-  { id: '12', title: 'Wrestling training session', date: 'Nov 15th', time: '5:00 – 7:00 PM EDT', venue: 'Training Center', priceFrom: '$22.00', miles: 4.8, pillar: 'Wrestlers', postedAt: '2024-10-30T14:00:00Z', distanceMi: 4.8, startsAt: '2024-11-15T17:00:00Z', endsAt: '2024-11-15T19:00:00Z' },
-];
+// Mock events removed - using Firestore posts
 
 const DEFAULT_FILTERS: Filters = {
   categories: [],          // empty => all
@@ -117,7 +131,7 @@ const DEFAULT_FILTERS: Filters = {
 
 
 
-export default function GigScreen() {
+export default function Gig() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { role } = useUserRole();
@@ -125,6 +139,9 @@ export default function GigScreen() {
   const [city, setCity] = useState<City | null>(null);
   const [pickVisible, setPickVisible] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
+  
+  // Add Event Bottom Sheet state
+  const [addEventSheetVisible, setAddEventSheetVisible] = useState(false);
   
   // The active, applied filters:
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
@@ -135,13 +152,106 @@ export default function GigScreen() {
   // Track if goals banner is dismissed
   const [goalsBannerDismissed, setGoalsBannerDismissed] = useState(false);
   
+  // Firestore posts
+  const [firestorePosts, setFirestorePosts] = useState<EventItem[]>([]);
+  
+  // Favorites state for events
+  const [favorites, setFavorites] = useState<Record<string, boolean>>({});
+  
+  // Toggle favorite function
+  const toggleFav = (id: string) => {
+    setFavorites(prev => ({ ...prev, [id]: !prev[id] }));
+  };
 
+  // Convert Firestore post to EventItem format
+  const convertFirestorePostToEventItem = (doc: any): EventItem => {
+    const data = doc.data();
+    const createdAt = data.createdAt?.toDate?.() || new Date();
+    
+    return {
+      id: doc.id,
+      title: data.title || 'Untitled Event',
+      date: data.startDate || 'Date TBD',
+      time: data.time || 'Time TBD',
+      venue: data.address || 'Venue TBD',
+      priceFrom: data.gigPrice ? `$${data.gigPrice}` : '$0',
+      miles: 0,
+      pillar: data.category || 'Event',
+      postedAt: createdAt.toISOString(),
+      distanceMi: 0,
+      startsAt: data.startDate || createdAt.toISOString(),
+      endsAt: data.endDate || createdAt.toISOString(),
+      // Additional fields
+      category: data.category || 'Event',
+      description: data.description,
+      contactInfo: data.contact,
+      gigGroupName: '',
+      photoUri: data.photoUrl, // Use photoUrl from Firestore
+      location: data.address,
+      address: data.address,
+      hourlyAmount: data.gigPrice ? `$${data.gigPrice}` : '$0',
+      startDate: data.startDate,
+      endDate: data.endDate,
+      // Firestore fields
+      userId: data.userId,
+      type: data.type,
+      photoUrl: data.photoUrl,
+      contact: data.contact,
+      gigPrice: data.gigPrice,
+      createdAt: data.createdAt,
+    };
+  };
+
+  // Convert Google Event to EventItem format
+  const convertGoogleEventToEventItem = (doc: any): EventItem => {
+    const data = doc.data();
+    const createdAt = data.createdAt?.toDate?.() || new Date();
+    
+    return {
+      id: doc.id,
+      title: data.eventTitle || data.venueName || 'Untitled Venue Event', // Use eventTitle first, fallback to venueName
+      date: data.startDate || data.date || 'Date TBD',
+      time: data.time || 'Time TBD',
+      venue: data.venueAddress || 'Venue TBD',
+      priceFrom: data.gigPrice ? `$${data.gigPrice}` : '$0', // Use actual gigPrice if available
+      miles: 0,
+      pillar: data.category || 'Google Event',
+      postedAt: createdAt.toISOString(),
+      distanceMi: 0,
+      startsAt: data.startDate || data.date || createdAt.toISOString(),
+      endsAt: data.endDate || data.date || createdAt.toISOString(),
+      // Additional fields
+      category: data.category || 'Google Event',
+      description: data.description,
+      contactInfo: 'Contact TBD',
+      gigGroupName: '',
+      photoUri: data.venuePhoto || PLACEHOLDER_IMAGE,
+      location: data.venueAddress,
+      address: data.venueAddress,
+      hourlyAmount: data.gigPrice ? `$${data.gigPrice}` : '$0',
+      startDate: data.date,
+      endDate: data.date,
+      // Firestore fields
+      userId: data.createdBy,
+      type: 'promoter',
+      photoUrl: data.venuePhoto,
+      contact: 'Contact TBD',
+      gigPrice: data.gigPrice || 0,
+      createdAt: createdAt,
+      // Google Event specific fields
+      categories: data.categories || [],
+      venueName: data.venueName,
+      venueAddress: data.venueAddress,
+      venuePhoto: data.venuePhoto,
+    };
+  };
   
   // Determine if user is a promoter
   const isPromoter = role === 'promoter';
   
   useEffect(() => {
     (async () => {
+      // Only load selected city, don't clear events
       const v = await AsyncStorage.getItem('selectedCity');
       if (v) {
         // Convert stored string to City object
@@ -150,6 +260,90 @@ export default function GigScreen() {
     })();
   }, []);
 
+  // Set up Firestore listener for posts and google events with auth check
+  useEffect(() => {
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        console.log("No user logged in, skipping Firestore query");
+        setFirestorePosts([]); // Clear posts when user logs out
+        return;
+      }
+
+      console.log("User authenticated, setting up Firestore listeners");
+      
+      const postsQuery = query(collection(db, "posts"), orderBy("createdAt", "desc"));
+      const googleEventsQuery = query(collection(db, "googleevents"), orderBy("createdAt", "desc"));
+      
+      let allPosts: EventItem[] = [];
+      let allGoogleEvents: EventItem[] = [];
+      
+      const unsubscribePosts = onSnapshot(postsQuery, (snapshot) => {
+        try {
+          allPosts = snapshot.docs.map(doc => convertFirestorePostToEventItem(doc));
+          mergeAndSortAllEvents();
+          console.log('✅ Successfully loaded', allPosts.length, 'posts from Firestore');
+        } catch (error) {
+          console.error('❌ Error processing Firestore posts:', error);
+        }
+      }, (error) => {
+        console.error('❌ Error listening to Firestore posts:', error);
+        
+        // More specific error handling
+        if (error.code === 'permission-denied') {
+          console.error('Permission denied: Check Firestore security rules');
+        } else if (error.code === 'unavailable') {
+          console.error('Firestore service unavailable');
+        } else if (error.code === 'unauthenticated') {
+          console.error('User not authenticated');
+        }
+        
+        // Don't clear existing posts on error - keep them visible
+      });
+
+      const unsubscribeGoogleEvents = onSnapshot(googleEventsQuery, (snapshot) => {
+        try {
+          allGoogleEvents = snapshot.docs.map(doc => convertGoogleEventToEventItem(doc));
+          mergeAndSortAllEvents();
+          console.log('✅ Successfully loaded', allGoogleEvents.length, 'Google events from Firestore');
+        } catch (error) {
+          console.error('❌ Error processing Google events:', error);
+        }
+      }, (error) => {
+        console.error('❌ Error listening to Google events:', error);
+      });
+
+      // Function to merge and sort all events by creation time
+      const mergeAndSortAllEvents = () => {
+        const combinedEvents = [...allPosts, ...allGoogleEvents];
+        
+        // Sort by creation time (newest first)
+        combinedEvents.sort((a, b) => {
+          const timeA = a.createdAt?.toDate?.() || new Date(a.postedAt);
+          const timeB = b.createdAt?.toDate?.() || new Date(b.postedAt);
+          return timeB.getTime() - timeA.getTime();
+        });
+        
+        setFirestorePosts(combinedEvents);
+      };
+
+      // Store unsubscribe functions to clean up when auth state changes
+      return () => {
+        unsubscribePosts();
+        unsubscribeGoogleEvents();
+      };
+    });
+
+    return () => {
+      unsubscribeAuth();
+    };
+  }, []);
+
+  // AsyncStorage logic removed - using Firestore posts
+
+
+
+
+
   const filtersAreDefault =
     (filters.maxMiles === DEFAULT_FILTERS.maxMiles) &&
     (filters.time === DEFAULT_FILTERS.time) &&
@@ -157,8 +351,8 @@ export default function GigScreen() {
 
   // Live preview count while the sheet is open (DRAFT)
   const previewCount = useMemo(() => {
-    return MOCK_EVENTS.length; // Simplified for now
-  }, [draft]);
+    return firestorePosts.length; // Show count of Firestore posts
+  }, [draft, firestorePosts.length]);
 
   // Handle goal press
   const handleGoalPress = (goalId: string) => {
@@ -173,7 +367,7 @@ export default function GigScreen() {
 
   // Handle FAB press
   const handleFABPress = () => {
-    router.push('/screen/CreateEvent');
+    setAddEventSheetVisible(true);
   };
 
 
@@ -210,26 +404,25 @@ export default function GigScreen() {
     return eventDate;
   };
 
-  const upcomingEvents = MOCK_EVENTS.filter(event => {
+  // Use Firestore posts for all users, with role-based filtering
+  const upcomingEvents = firestorePosts.filter(event => {
     const eventDate = parseEventDate(event.date);
     const now = new Date();
     return eventDate >= now;
   });
 
-  const pastEvents = MOCK_EVENTS.filter(event => {
+  const pastEvents = firestorePosts.filter(event => {
     const eventDate = parseEventDate(event.date);
     const now = new Date();
-    return eventDate < now && !!event.applied;
+    return eventDate < now;
   });
 
-  const inviteEvents = MOCK_EVENTS.filter(event => !!event.invited);
+  const inviteEvents = role === 'talent'
+    ? [] // Talent users don't have invites from Firestore data
+    : firestorePosts.filter(event => !!event.invited);
 
   // Render event function for upcoming tab
   const renderEvent = ({ item }: { item: EventItem }) => {
-    const [favorites, setFavorites] = useState<Record<string, boolean>>({});
-    
-    const toggleFav = (id: string) =>
-      setFavorites(prev => ({ ...prev, [id]: !prev[id] }));
 
     const formatMiles = (miles?: number) => {
       if (typeof miles === 'number') {
@@ -242,16 +435,51 @@ export default function GigScreen() {
       const now = Date.now();
       const then = new Date(iso).getTime();
       const diffMs = Math.max(0, now - then);
-      const mins = Math.floor(diffMs / 60000);
-      if (mins < 60) return `${mins} min${mins !== 1 ? 's' : ''} ago`;
-      const hrs = Math.floor(mins / 60);
-      if (hrs < 24) return `${hrs} hour${hrs !== 1 ? 's' : ''} ago`;
-      const days = Math.floor(hrs / 24);
-      return `${days} day${days !== 1 ? 's' : ''} ago`;
+      
+      const seconds = Math.floor(diffMs / 1000);
+      const minutes = Math.floor(seconds / 60);
+      const hours = Math.floor(minutes / 60);
+      const days = Math.floor(hours / 24);
+      const weeks = Math.floor(days / 7);
+      const months = Math.floor(days / 30);
+      const years = Math.floor(days / 365);
+      
+      if (seconds < 60) return 'Just now';
+      if (minutes < 60) return `${minutes} min${minutes !== 1 ? 's' : ''} ago`;
+      if (hours < 24) return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
+      if (days < 7) return `${days} day${days !== 1 ? 's' : ''} ago`;
+      if (weeks < 4) return `${weeks} week${weeks !== 1 ? 's' : ''} ago`;
+      if (months < 12) return `${months} month${months !== 1 ? 's' : ''} ago`;
+      return `${years} year${years !== 1 ? 's' : ''} ago`;
     }
 
     const navigateToEventDetail = () => {
-      console.log('Navigate to event detail');
+      router.push({
+        pathname: '/screen/Eventdetail',
+        params: {
+          title: item.title,
+          dateLine: `${item.date} • ${item.time}`,
+          venue: item.venue,
+          priceText: `Gig Price: ${item.priceFrom}`,
+          city: item.venue,
+          // Pass additional data for user-created events
+          description: (item as any).description,
+          contactInfo: (item as any).contactInfo,
+          gigGroupName: (item as any).gigGroupName,
+          photoUri: (item as any).photoUri,
+          location: (item as any).location,
+          address: (item as any).address,
+          hourlyAmount: (item as any).hourlyAmount,
+          startDate: (item as any).startDate,
+          endDate: (item as any).endDate,
+          // Firestore fields
+          userId: (item as any).userId,
+          type: (item as any).type,
+          photoUrl: (item as any).photoUrl,
+          contact: (item as any).contact,
+          gigPrice: (item as any).gigPrice?.toString(),
+        }
+      });
     };
 
     const milesLine = formatMiles(item.miles);
@@ -262,7 +490,17 @@ export default function GigScreen() {
         onPress={navigateToEventDetail}
       >
         <View style={{ position: 'relative', borderTopLeftRadius: 16, borderTopRightRadius: 16, overflow: 'hidden' }}>
-          <Image source={{ uri: 'https://picsum.photos/800/600?random=' + item.id }} style={styles.cardImage} />
+          <Image 
+            source={{ 
+              uri: (item as any).photoUrl || (item as any).photoUri || PLACEHOLDER_IMAGE
+            }} 
+            style={styles.cardImage} 
+            defaultSource={{ uri: PLACEHOLDER_IMAGE }}
+            onError={() => {
+              // If image fails to load, we could set a state to show a placeholder
+              console.log('Image failed to load for event:', item.id);
+            }}
+          />
           
           {/* Posted badge */}
           <View style={styles.postedBadge}>
@@ -289,8 +527,8 @@ export default function GigScreen() {
         </View>
 
         <View style={{ padding: 16 }}>
-          {/* Pillar chip */}
-          <PillarChip label={item.pillar} />
+          {/* Category chip */}
+          <PillarChip label={item.category || item.pillar} />
           
           {/* Title */}
           <Text style={styles.cardTitle} numberOfLines={2}>
@@ -346,9 +584,14 @@ export default function GigScreen() {
       ListEmptyComponent={() => (
         <View style={styles.emptyState}>
           <Ionicons name="search-outline" size={48} color="#9CA3AF" />
-          <Text style={styles.emptyStateTitle}>No upcoming gigs</Text>
+          <Text style={styles.emptyStateTitle}>
+            {role === 'talent' ? 'No gigs available' : 'No upcoming gigs'}
+          </Text>
           <Text style={styles.emptyStateSubtitle}>
-            Try adjusting your filters or check back later
+            {role === 'talent' 
+              ? 'No promoter events have been posted yet' 
+              : 'Try adjusting your filters or check back later'
+            }
           </Text>
         </View>
       )}
@@ -387,9 +630,14 @@ export default function GigScreen() {
       ListEmptyComponent={() => (
         <View style={styles.emptyState}>
           <Ionicons name="search-outline" size={48} color="#9CA3AF" />
-          <Text style={styles.emptyStateTitle}>No past gigs</Text>
+          <Text style={styles.emptyStateTitle}>
+            {role === 'talent' ? 'No past gigs' : 'No past gigs'}
+          </Text>
           <Text style={styles.emptyStateSubtitle}>
-            Gigs you've applied to will appear here
+            {role === 'talent' 
+              ? 'No past promoter events available' 
+              : 'Gigs you\'ve applied to will appear here'
+            }
           </Text>
         </View>
       )}
@@ -428,34 +676,71 @@ export default function GigScreen() {
       ListEmptyComponent={() => (
         <View style={styles.emptyState}>
           <Ionicons name="search-outline" size={48} color="#9CA3AF" />
-          <Text style={styles.emptyStateTitle}>No invites</Text>
+          <Text style={styles.emptyStateTitle}>
+            {role === 'talent' ? 'No invites' : 'No invites'}
+          </Text>
           <Text style={styles.emptyStateSubtitle}>
-            Invitations from promoters will appear here
+            {role === 'talent' 
+              ? 'No invitations available yet' 
+              : 'Invitations from promoters will appear here'
+            }
           </Text>
         </View>
       )}
     />
   );
 
-  const MyEventsTabWithGoals = () => (
-    <View style={{ flex: 1 }}>
-      {!goalsBannerDismissed && (
-        <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16 }}>
-          <GoalsSection 
-            onGoalPress={handleGoalPress} 
-            onDismiss={handleGoalsBannerDismiss}
-          />
+  const MyEventsTabWithGoals = () => {
+    const router = useRouter();
+    
+    // Filter events to show only the current user's events for promoters
+    const myEvents = role === 'promoter' 
+      ? firestorePosts.filter(event => event.userId === auth.currentUser?.uid)
+      : firestorePosts; // Talent users see all events
+    
+    if (myEvents.length === 0) {
+      return (
+        <View style={{ flex: 1 }}>
+          {!goalsBannerDismissed && (
+            <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16 }}>
+              <GoalsSection 
+                onGoalPress={handleGoalPress} 
+                onDismiss={handleGoalsBannerDismiss}
+              />
+            </View>
+          )}
+          <View style={styles.myEventsEmptyState}>
+            <Ionicons name="calendar-outline" size={48} color="#9CA3AF" />
+            <Text style={styles.emptyStateTitle}>No gigs yet</Text>
+            <Text style={styles.emptyStateSubtitle}>
+              Create an event to see your posts here.
+            </Text>
+          </View>
         </View>
-      )}
-      <View style={styles.myEventsEmptyState}>
-        <Ionicons name="calendar-outline" size={48} color="#9CA3AF" />
-        <Text style={styles.emptyStateTitle}>No events yet</Text>
-        <Text style={styles.emptyStateSubtitle}>
-          "No events yet — create your first one!"
-        </Text>
-      </View>
-    </View>
-  );
+      );
+    }
+
+    return (
+      <FlatList
+        data={myEvents}
+        renderItem={renderEvent}
+        keyExtractor={(item) => item.id}
+        ItemSeparatorComponent={() => <View style={{ height: 14 }} />}
+        contentContainerStyle={{ padding: 16, paddingTop: 8 }}
+        showsVerticalScrollIndicator={false}
+        ListHeaderComponent={
+          !goalsBannerDismissed ? (
+            <View style={{ paddingBottom: 16 }}>
+              <GoalsSection 
+                onGoalPress={handleGoalPress} 
+                onDismiss={handleGoalsBannerDismiss}
+              />
+            </View>
+          ) : null
+        }
+      />
+    );
+  };
 
   const CandidatesTabWithGoals = () => (
     <View style={{ flex: 1 }}>
@@ -480,89 +765,71 @@ export default function GigScreen() {
   const PastEventsTabWithGoals = () => {
     const router = useRouter();
     
-    // Always show mock past events (IDs 7-12) for dummy data visibility
-    const pastEvents = MOCK_EVENTS.filter(event => {
-      const isPastEvent = ['7', '8', '9', '10', '11', '12'].includes(event.id);
-      console.log(`Event ${event.id}: ${event.title} - isPastEvent: ${isPastEvent}`);
-      return isPastEvent;
-    });
+    // For promoters: always show empty state for now
+    // For talents: show all past events
+    if (role === 'promoter') {
+      return (
+        <View style={{ flex: 1 }}>
+          {!goalsBannerDismissed && (
+            <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16 }}>
+              <GoalsSection 
+                onGoalPress={handleGoalPress} 
+                onDismiss={handleGoalsBannerDismiss}
+              />
+            </View>
+          )}
+          <View style={styles.emptyState}>
+            <Ionicons name="calendar-outline" size={48} color="#9CA3AF" />
+            <Text style={styles.emptyStateTitle}>No past events</Text>
+            <Text style={styles.emptyStateSubtitle}>
+              Past events will appear here when they're completed
+            </Text>
+          </View>
+        </View>
+      );
+    }
     
-    console.log(`PastEventsTab: Found ${pastEvents.length} past events`);
-
-    const renderPastEvent = ({ item }: { item: EventItem }) => (
-      <Pressable 
-        style={styles.card} 
-        onPress={() => {
-          router.push({
-            pathname: '/screen/Eventdetail',
-            params: {
-              title: item.title,
-              dateLine: `${item.date} • ${item.time}`,
-              venue: item.venue,
-              priceText: `Gig Price: ${item.priceFrom}`,
-              city: item.venue,
-            }
-          });
-        }}
-      >
-        {/* Event Image */}
-        <Image
-          source={{ uri: 'https://picsum.photos/seed/' + item.id + '/400/200' }}
-          style={styles.cardImage}
-          resizeMode="cover"
-        />
-        
-        {/* Category Pillar */}
-        <View style={styles.cardActions}>
-          <PillarChip label={item.pillar} />
+    // For talents: show all past events
+    if (pastEvents.length === 0) {
+      return (
+        <View style={{ flex: 1 }}>
+          {!goalsBannerDismissed && (
+            <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16 }}>
+              <GoalsSection 
+                onGoalPress={handleGoalPress} 
+                onDismiss={handleGoalsBannerDismiss}
+              />
+            </View>
+          )}
+          <View style={styles.emptyState}>
+            <Ionicons name="calendar-outline" size={48} color="#9CA3AF" />
+            <Text style={styles.emptyStateTitle}>No past events</Text>
+            <Text style={styles.emptyStateSubtitle}>
+              Past events will appear here when they're completed
+            </Text>
+          </View>
         </View>
-        
-        {/* Posted Badge */}
-        <View style={styles.postedBadge}>
-          <Text style={styles.postedText}>Posted</Text>
-        </View>
-        
-        {/* Event Details */}
-        <View style={{ padding: 16 }}>
-          <Text style={styles.cardTitle}>{item.title}</Text>
-          <Text style={styles.cardMeta}>
-            {item.date} {item.time} • {item.venue}
-          </Text>
-          <Text style={styles.cardMeta}>
-            {item.distanceMi.toFixed(1)} miles away
-          </Text>
-        </View>
-      </Pressable>
-    );
+      );
+    }
 
     return (
-      <FlatList 
+      <FlatList
         data={pastEvents}
-        keyExtractor={i => i.id}
-        renderItem={renderPastEvent}
+        renderItem={renderEvent}
+        keyExtractor={(item) => item.id}
         ItemSeparatorComponent={() => <View style={{ height: 14 }} />}
         contentContainerStyle={{ padding: 16, paddingTop: 8 }}
         showsVerticalScrollIndicator={false}
-        style={{ flex: 1 }}
-        ListHeaderComponent={() => (
+        ListHeaderComponent={
           !goalsBannerDismissed ? (
-            <View style={{ marginBottom: 16 }}>
+            <View style={{ paddingBottom: 16 }}>
               <GoalsSection 
                 onGoalPress={handleGoalPress} 
                 onDismiss={handleGoalsBannerDismiss}
               />
             </View>
           ) : null
-        )}
-        ListEmptyComponent={() => (
-          <View style={styles.emptyState}>
-            <Ionicons name="calendar-outline" size={48} color="#9CA3AF" />
-            <Text style={styles.emptyStateTitle}>No past events</Text>
-            <Text style={styles.emptyStateSubtitle}>
-              Your past events will appear here once they're completed.
-            </Text>
-          </View>
-        )}
+        }
       />
     );
   };
@@ -634,6 +901,7 @@ export default function GigScreen() {
       {/* Tab content area */}
       <View style={styles.tabContentArea}>
                       <Tab.Navigator
+                        id={undefined}
                 screenOptions={{
                   tabBarStyle: styles.tabBar,
                   tabBarLabelStyle: styles.tabLabel,
@@ -687,6 +955,12 @@ export default function GigScreen() {
         }}
         onClose={() => setFilterOpen(false)}
       />
+
+              {/* Add Event Bottom Sheet */}
+        <AddEventBottomSheet
+          visible={addEventSheetVisible}
+          onClose={() => setAddEventSheetVisible(false)}
+        />
 
       {/* FAB for promoters */}
       {role === 'promoter' && (

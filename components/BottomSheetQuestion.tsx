@@ -18,6 +18,7 @@ type Props = {
   title: string;
   initialValue?: string;
   placeholder?: string;
+  keyboardType?: 'default' | 'numeric' | 'phone-pad' | 'email-address';
   onDone: (value: string) => void;
   onClose: () => void;
 };
@@ -27,6 +28,7 @@ export default function BottomSheetQuestion({
   title,
   initialValue = '',
   placeholder = 'Type here…',
+  keyboardType = 'default',
   onDone,
   onClose,
 }: Props) {
@@ -85,11 +87,12 @@ export default function BottomSheetQuestion({
             onChangeText={setText}
             placeholder={placeholder}
             placeholderTextColor="#9CA3AF"
-            multiline
+            multiline={keyboardType === 'default'}
             textAlignVertical="top"
             style={styles.textarea}
             returnKeyType="done"
             onSubmitEditing={handleDone}
+            keyboardType={keyboardType}
           />
         </Animated.View>
       </Animated.View>

@@ -1,4 +1,3 @@
-
 import 'react-native-gesture-handler';
 import 'react-native-reanimated';
 import 'react-native-url-polyfill/auto';
@@ -12,11 +11,11 @@ import { UserRoleProvider } from '../contexts/UserRoleContext';
 const GOOGLE_MAPS_API_KEY_ANDROID = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_ANDROID;
 const GOOGLE_MAPS_API_KEY_IOS = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_IOS;
 
-// Debug only: remove logs in production
 console.log("Google Maps API Key Android:", GOOGLE_MAPS_API_KEY_ANDROID);
 console.log("Google Maps API Key iOS:", GOOGLE_MAPS_API_KEY_IOS);
 
 export default function RootLayout() {
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <UserRoleProvider>
@@ -33,10 +32,7 @@ export default function RootLayout() {
             <Stack.Screen name="screen/eventdetail" options={{ title: 'Event Detail' }} />
             <Stack.Screen 
               name="screen/CreateEvent" 
-              options={{ 
-                title: 'Create Event',
-                presentation: 'modal', // animates upward like a bottom sheet
-              }} 
+              options={{ title: 'Create Event' }} 
             />
             <Stack.Screen name="screen/previewpost" options={{ title: 'Preview Post' }} />
             <Stack.Screen name="screen/eventdetailpreview" options={{ title: 'Event Detail Preview' }} />
@@ -45,6 +41,7 @@ export default function RootLayout() {
             <Stack.Screen name="screen/privatemessages" options={{ title: 'Private Messages' }} />
             <Stack.Screen name="screen/chat" options={{ title: 'Chat' }} />
             <Stack.Screen name="screen/profile" options={{ title: 'Profile' }} />
+            <Stack.Screen name="screen/gigagent/editprofile" options={{ title: 'Edit Profile' }} />
             <Stack.Screen name="screen/books" options={{ title: 'Books' }} />
           </Stack>
         </UserLocationProvider>
@@ -52,4 +49,3 @@ export default function RootLayout() {
     </GestureHandlerRootView>
   );
 }
-

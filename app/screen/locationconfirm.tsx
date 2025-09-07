@@ -7,10 +7,21 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 const BG = '#F5F3F0';
 
 export default function LocationConfirm() {
-  const { city } = useLocalSearchParams<{ city?: string }>();
+  const { city, state } = useLocalSearchParams<{ city?: string; state?: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const titleCity = (city ?? 'Your city').trim();
+  
+  // Format the location display
+  const formatLocation = () => {
+    if (city && state) {
+      return `${city}, ${state}`;
+    } else if (city) {
+      return city;
+    }
+    return 'Your city';
+  };
+  
+  const titleCity = formatLocation().trim();
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 16 }]}>
@@ -33,7 +44,7 @@ export default function LocationConfirm() {
         </View>
 
         <Pressable
-          onPress={() => router.replace('/screen/Eventlist')}
+          onPress={() => router.replace('/screen/eventlist')}
           style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}
         >
           <Text style={styles.ctaText}>Continue</Text>

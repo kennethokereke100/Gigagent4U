@@ -76,13 +76,13 @@ export default function Message({
       switch (fromScreen) {
         case 'notifications':
           // Return to eventlist with notifications tab active to maintain bottom nav
-          navigation.push('/screen/Eventlist?activeTab=notifications');
+          navigation.push('/screen/eventlist?activeTab=notifications');
           return;
         case 'privatemessages':
           navigation.push('/screen/Privatemessages');
           return;
         case 'gigs':
-          navigation.push('/screen/Eventlist');
+          navigation.push('/screen/eventlist');
           return;
         default:
           // For any other fromScreen value, use back navigation

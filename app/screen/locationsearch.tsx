@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import PickLocationSheet from '../../components/PickLocationSheet';
 import { useUserLocation } from '../../contexts/UserLocationContext';
 import { useUserRole } from '../../contexts/UserRoleContext';
+import { getGoogleMapsApiKey } from '../../utils/getGoogleMapsApiKey';
 
 const BG = '#F5F3F0';
 
@@ -31,44 +32,123 @@ export default function LocationSearch() {
     return "Where are we going?";
   }, [role]);
 
-  const goToEventList = () => router.replace('/screen/Eventlist');
-  const goToConfirm = (city: string) => router.push({ pathname: '/screen/Locationconfirm', params: { city } });
+  const goToEventList = () => router.replace('/screen/eventlist');
+  const goToConfirm = (city: string, state: string) => router.push({ 
+    pathname: '/screen/Locationconfirm', 
+    params: { city, state } 
+  });
+
+  // Get device location using Google Maps Geolocation API
+  const getDeviceLocation = async () => {
+    try {
+      const apiKey = getGoogleMapsApiKey();
+      if (!apiKey) {
+        console.error('❌ Google Maps API key not available');
+        return null;
+      }
+
+      // Get device location using Google's Geolocation API
+      const response = await fetch(
+        `https://www.googleapis.com/geolocation/v1/geolocate?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            considerIp: true, // Use IP-based location as fallback
+          }),
+        }
+      );
+
+      const data = await response.json();
+      
+      if (data.location) {
+        console.log('📍 Device location obtained:', data.location);
+        return data.location;
+      } else {
+        console.error('❌ Geolocation API error:', data.error);
+        return null;
+      }
+    } catch (error) {
+      console.error('❌ Error getting device location:', error);
+      return null;
+    }
+  };
+
+  // Convert coordinates to city/state with fallbacks
+  const getCityStateWithFallback = async (lat: number, lng: number) => {
+    try {
+      // Step 1: Try Google Geocoding API
+      const apiKey = getGoogleMapsApiKey();
+      if (apiKey) {
+        const response = await fetch(
+          `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}&components=country:us`
+        );
+        const data = await response.json();
+        if (data.status === 'OK' && data.results.length > 0) {
+          const addressComponents = data.results[0].address_components;
+          let city = '';
+          let state = '';
+          for (const comp of addressComponents) {
+            if (comp.types.includes('locality')) city = comp.long_name;
+            if (comp.types.includes('administrative_area_level_1')) state = comp.short_name;
+          }
+          if (city && state) {
+            console.log('✅ Google resolved city/state:', city, state);
+            return { city, state };
+          }
+        }
+      }
+
+      // Step 2: Fallback to Expo reverse geocoding
+      const reverse = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
+      if (reverse.length > 0) {
+        const { city, region } = reverse[0];
+        if (city && region) {
+          console.log('✅ Expo reverse geocode resolved city/state:', city, region);
+          return { city, state: region };
+        }
+      }
+
+      // Step 3: Hardcode fallback
+      console.warn('⚠️ Falling back to Baltimore, Maryland');
+      return { city: 'Baltimore', state: 'MD' };
+
+    } catch (error) {
+      console.error('❌ Error resolving city/state:', error);
+      return { city: 'Baltimore', state: 'MD' };
+    }
+  };
 
   const onCurrentLocation = async () => {
     try {
       setLoading(true);
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
+      console.log('🔍 Getting current location...');
+      
+      // Step 1: Get device coordinates
+      const location = await getDeviceLocation();
+      if (!location) {
+        console.log('❌ Could not get device location');
         setLoading(false);
         goToEventList();
         return;
       }
       
-      const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      // Step 2: Convert coordinates to city/state (will always return valid city/state or Baltimore fallback)
+      const cityState = await getCityStateWithFallback(location.lat, location.lng);
       
-      // Reverse geocode to get city and region
-      const reverseGeocode = await Location.reverseGeocodeAsync({
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-      });
+      // Step 3: Save to context and navigate
+      const cityStateString = `${cityState.city}, ${cityState.state}`;
+      setLocation(cityState.city, cityState.state);
+      setChosenCity(cityStateString);
+      setLoading(false);
       
-      if (reverseGeocode.length > 0) {
-        const location = reverseGeocode[0];
-        const city = location.city || location.subregion || 'Unknown City';
-        const region = location.region || '';
-        const cityStateString = region ? `${city}, ${region}` : city;
-        
-        // Save to global context
-        setLocation(city, region);
-        setChosenCity(cityStateString);
-        setLoading(false);
-        goToConfirm(cityStateString);
-      } else {
-        setLoading(false);
-        goToEventList();
-      }
+      console.log('✅ Location resolved and saved:', cityStateString);
+      goToConfirm(cityState.city, cityState.state);
+      
     } catch (error) {
-      console.error('Location error:', error);
+      console.error('❌ Location error:', error);
       setLoading(false);
       goToEventList();
     }
@@ -129,7 +209,7 @@ export default function LocationSearch() {
             setLocation(city, state);
             setChosenCity(picked.name);
             setPickerOpen(false);
-            goToConfirm(picked.name);
+            goToConfirm(city, state);
           } else {
             setPickerOpen(false);
           }

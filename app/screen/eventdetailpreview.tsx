@@ -1,51 +1,158 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { addDoc, collection, getDocs, query, where } from 'firebase/firestore';
+import React, { useState } from 'react';
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { auth, db } from '../../firebaseConfig';
+import { createPostInFirestore, PostData } from '../../utils/createPostInFirestore';
 
 const BG = '#F5F3F0';
+const PLACEHOLDER_IMAGE = 'https://picsum.photos/seed/gigplaceholder/800/450';
 
 export default function EventDetailPreview() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const [isPosting, setIsPosting] = useState(false);
 
   // Get event data from navigation params
   const {
+    category = 'Event',
     title = 'Event Title',
     description = 'Event description',
     address = 'Event address',
     contactInfo = 'Contact info',
-    gigGroupName = 'Group name',
+    // gigGroupName = 'Group name',
     hourlyAmount = '$0',
     startDate = '',
     endDate = '',
     time = '',
     photoUri = '',
+    coverImage = '',
     location = '',
   } = useLocalSearchParams<{
+    category?: string;
     title?: string;
     description?: string;
     address?: string;
     contactInfo?: string;
-    gigGroupName?: string;
+    // gigGroupName?: string;
     hourlyAmount?: string;
     startDate?: string;
     endDate?: string;
     time?: string;
     photoUri?: string;
+    coverImage?: string;
     location?: string;
   }>();
 
-  const handlePost = () => {
-    // TODO: Implement final submission logic
-    // For now, just go back to create event
-    router.back();
+  const handlePost = async () => {
+    if (isPosting) return;
+    
+    setIsPosting(true);
+    try {
+      // Create the post data object for Firestore
+      const postData: PostData = {
+        userId: auth.currentUser!.uid,
+        type: "promoter",
+        photoUrl: coverImage || photoUri || PLACEHOLDER_IMAGE,
+        title: title.trim(),
+        description: description.trim(),
+        address: address.trim(),
+        startDate: startDate || '',
+        endDate: endDate || '',
+        time: time || 'Time TBD',
+        contact: contactInfo.trim(),
+        gigPrice: parseFloat(hourlyAmount.replace(/[^0-9.]/g, '')) || 0,
+      };
+
+      // Post to Firestore
+      const postId = await createPostInFirestore(postData);
+      console.log('✅ Event posted successfully with ID:', postId);
+
+      // Check if this is the user's first post and send notification
+      try {
+        const userPostsQuery = query(
+          collection(db, 'posts'),
+          where('userId', '==', auth.currentUser!.uid)
+        );
+        const userPostsSnapshot = await getDocs(userPostsQuery);
+        
+        // If this is the first post (only 1 document in the query result)
+        if (userPostsSnapshot.docs.length === 1) {
+          await addDoc(collection(db, 'notifications'), {
+            userId: auth.currentUser!.uid,
+            message: "Congratulations on your first event! Now invite a talent.",
+            cta: "Invite Talent",
+            createdAt: new Date(),
+            read: false,
+          });
+          console.log('🎉 First post notification sent!');
+        }
+      } catch (notificationError) {
+        console.error('❌ Error sending first post notification:', notificationError);
+        // Don't fail the post if notification fails
+      }
+
+      // Show success message
+      Alert.alert(
+        'Success!',
+        'Your event has been posted successfully.',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              // Navigate to eventlist with Gig tab active to view the posted event
+              router.replace('/screen/eventlist');
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      console.error('❌ Error posting event:', error);
+      
+      // More specific error handling
+      let errorMessage = 'Failed to post your event. Please try again.';
+      if (error instanceof Error) {
+        if (error.message.includes('permission')) {
+          errorMessage = 'Permission denied. Please check your authentication.';
+        } else if (error.message.includes('network')) {
+          errorMessage = 'Network error. Please check your connection and try again.';
+        } else if (error.message.includes('quota')) {
+          errorMessage = 'Service temporarily unavailable. Please try again later.';
+        }
+      }
+      
+      Alert.alert(
+        'Error',
+        errorMessage,
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setIsPosting(false);
+    }
   };
 
   const handleEdit = () => {
-    // Navigate back to preview post
-    router.back();
+    // Navigate to CreateEvent with prefilled data
+    router.push({
+      pathname: '/screen/CreateEvent',
+      params: {
+        category,
+        title,
+        description,
+        address,
+        contactInfo,
+        // gigGroupName,
+        hourlyAmount,
+        startDate,
+        endDate,
+        time,
+        photoUri,
+        coverImage,
+        location,
+      }
+    });
   };
 
   // Format date range and time
@@ -81,18 +188,14 @@ export default function EventDetailPreview() {
         {/* HERO */}
         <View style={styles.heroWrap}>
           <Image
-            source={
-              photoUri
-                ? { uri: String(photoUri) }
-                : { uri: 'https://picsum.photos/seed/eventdetailpreview/800/450' }
-            }
+            source={{ uri: coverImage || photoUri || PLACEHOLDER_IMAGE }}
             style={styles.hero}
             resizeMode="cover"
           />
           {/* top chrome */}
           <View style={[styles.chrome, { paddingTop: insets.top + 8 }]}>
             <Pressable onPress={() => router.back()} style={styles.roundIcon} hitSlop={10}>
-              <Ionicons name="chevron-back" size={20} color="#111" />
+              <Ionicons name="close" size={20} color="#111" />
             </Pressable>
             <View style={{ flexDirection: 'row', gap: 10 }}>
               <Pressable style={styles.roundIcon} hitSlop={10}>
@@ -169,7 +272,7 @@ export default function EventDetailPreview() {
         </View>
 
         {/* GROUP SECTION (replaces Group) */}
-        <View style={styles.section}>
+        {/* <View style={styles.section}>
           <Text style={styles.sectionTitle}>Gig Group</Text>
           <View style={styles.groupRow}>
             <Text style={styles.groupName}>{gigGroupName}</Text>
@@ -177,7 +280,7 @@ export default function EventDetailPreview() {
               <Text style={styles.followText}>Follow</Text>
             </Pressable>
           </View>
-        </View>
+        </View> */}
 
         {/* PRICE + CTA */}
         <View style={styles.bottomPad} />
@@ -190,10 +293,20 @@ export default function EventDetailPreview() {
           <Text style={styles.mutedSmall}>All fees included</Text>
         </View>
         <View style={styles.footerButtons}>
-          <Pressable style={styles.cta} onPress={handlePost}>
-            <Text style={styles.ctaText}>Post</Text>
+          <Pressable 
+            style={[styles.cta, isPosting && styles.ctaDisabled]} 
+            onPress={handlePost}
+            disabled={isPosting}
+          >
+            <Text style={styles.ctaText}>
+              {isPosting ? 'Posting...' : 'Post'}
+            </Text>
           </Pressable>
-          <Pressable style={styles.editButton} onPress={handleEdit}>
+          <Pressable 
+            style={[styles.editButton, isPosting && styles.editButtonDisabled]} 
+            onPress={handleEdit}
+            disabled={isPosting}
+          >
             <Text style={styles.editButtonText}>Edit</Text>
           </Pressable>
         </View>
@@ -311,6 +424,13 @@ const styles = StyleSheet.create({
   editButtonText: {
     color: '#111',
     fontWeight: '600',
+  },
+  ctaDisabled: {
+    backgroundColor: '#9CA3AF',
+    opacity: 0.6,
+  },
+  editButtonDisabled: {
+    opacity: 0.6,
   },
   bottomPad: { height: 12 }
 });

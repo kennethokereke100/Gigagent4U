@@ -48,7 +48,7 @@ export default function PrivateMessages() {
 
   const onBack = () => {
     // Always navigate back to gig.tsx inside the gigagent folder
-    router.push('/screen/Eventlist');
+    router.push('/screen/eventlist');
   };
 
   const renderItem = ({ item }: { item: Thread }) => (

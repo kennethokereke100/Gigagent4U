@@ -12,20 +12,20 @@ interface CreateEventFormProps {
   title: string;
   description: string;
   address: string;
-  contactInfo: string;
-  gigGroupName: string;
+  // gigGroupName: string;
   hourlyAmount: string;
   startDate: string;
   endDate: string;
   time: string;
   photoUri: string;
+  coverImage: string;
+  isUploading: boolean;
   
   // State setters
   setTitle: (value: string) => void;
   setDescription: (value: string) => void;
   setAddress: (value: string) => void;
-  setContactInfo: (value: string) => void;
-  setGigGroupName: (value: string) => void;
+  // setGigGroupName: (value: string) => void;
   setHourlyAmount: (value: string) => void;
   setStartDate: (value: string) => void;
   setEndDate: (value: string) => void;
@@ -49,18 +49,18 @@ export default function CreateEventForm({
   title,
   description,
   address,
-  contactInfo,
-  gigGroupName,
+  // gigGroupName,
   hourlyAmount,
   startDate,
   endDate,
   time,
   photoUri,
+  coverImage,
+  isUploading,
   setTitle,
   setDescription,
   setAddress,
-  setContactInfo,
-  setGigGroupName,
+  // setGigGroupName,
   setHourlyAmount,
   setStartDate,
   setEndDate,
@@ -158,22 +158,10 @@ export default function CreateEventForm({
             </Pressable>
           </View>
 
-          {/* Contact Info Field */}
-          <View style={styles.fieldContainer}>
-            <Text style={styles.fieldLabel}>Contact Info</Text>
-            <TextInput
-              style={styles.textInput}
-              value={contactInfo}
-              onChangeText={setContactInfo}
-              placeholder="(123) 456-7890"
-              placeholderTextColor="#9CA3AF"
-              keyboardType="phone-pad"
-            />
-          </View>
 
           {/* Gig Group Name Field */}
           <View style={styles.fieldContainer}>
-            <Text style={styles.fieldLabel}>Gig Group Name</Text>
+            {/* <Text style={styles.fieldLabel}>Gig Group Name</Text>
             <View style={styles.groupNameContainer}>
               <TextInput
                 style={[styles.textInput, styles.groupNameInput]}
@@ -189,7 +177,7 @@ export default function CreateEventForm({
               >
                 <Ionicons name="information-circle-outline" size={20} color="#6B7280" />
               </Pressable>
-            </View>
+            </View> */}
           </View>
         </View>
 
@@ -239,11 +227,13 @@ export default function CreateEventForm({
         {/* Post Button */}
         <View style={styles.section}>
           <Pressable 
-            style={[styles.postButton, !isFormComplete() && styles.postButtonDisabled]}
-            disabled={!isFormComplete()}
+            style={[styles.postButton, (!isFormComplete() || isUploading) && styles.postButtonDisabled]}
+            disabled={!isFormComplete() || isUploading}
             onPress={onSubmit}
           >
-            <Text style={styles.postButtonText}>Preview Post</Text>
+            <Text style={styles.postButtonText}>
+              {isUploading ? 'Uploading...' : 'Preview Post'}
+            </Text>
           </Pressable>
         </View>
       </ScrollView>

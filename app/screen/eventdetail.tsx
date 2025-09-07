@@ -5,6 +5,7 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const BG = '#F5F3F0';
+const PLACEHOLDER_IMAGE = 'https://picsum.photos/seed/gigplaceholder/800/450';
 
 export default function EventDetail() {
   const router = useRouter();
@@ -17,20 +18,44 @@ export default function EventDetail() {
     venue = '1010 Nicollet Mall, Minneapolis, MN 55403, USA',
     promoterName = 'Allison Perez',
     promoterRole = 'Promoter',
-    groupName = 'Wrestling Group',
+    // groupName = 'Wrestling Group',
     priceText = 'Gig Price: $120',
     city = 'New York City',
     heroUri,
+    // Additional fields for user-created events
+    description,
+    address,
+    contactInfo,
+    // gigGroupName,
+    hourlyAmount,
+    startDate,
+    endDate,
+    time,
+    photoUri,
+    photoUrl,
+    location,
   } = useLocalSearchParams<{
     title?: string;
     dateLine?: string;
     venue?: string;
     promoterName?: string;
     promoterRole?: string;
-    groupName?: string;
+    // groupName?: string;
     priceText?: string;
     city?: string;
     heroUri?: string;
+    // Additional fields for user-created events
+    description?: string;
+    address?: string;
+    contactInfo?: string;
+    // gigGroupName?: string;
+    hourlyAmount?: string;
+    startDate?: string;
+    endDate?: string;
+    time?: string;
+    photoUri?: string;
+    photoUrl?: string;
+    location?: string;
   }>();
 
   return (
@@ -42,11 +67,7 @@ export default function EventDetail() {
         {/* HERO */}
         <View style={styles.heroWrap}>
           <Image
-            source={
-              heroUri
-                ? { uri: String(heroUri) }
-                : { uri: 'https://picsum.photos/seed/eventdetail/800/450' }
-            }
+            source={{ uri: photoUrl || photoUri || heroUri || PLACEHOLDER_IMAGE }}
             style={styles.hero}
             resizeMode="cover"
           />
@@ -101,6 +122,17 @@ export default function EventDetail() {
           </View>
         </View>
 
+        {/* GIG TYPE / TAGS */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Gig details</Text>
+          <Text style={styles.muted}>See if this gig fits you. Categories help promoters find the right talent.</Text>
+          <View style={styles.chips}>
+            {['Wrestler', 'Audition', 'Paid', 'Beginner friendly'].map((t) => (
+              <View key={t} style={styles.chip}><Text style={styles.chipText}>{t}</Text></View>
+            ))}
+          </View>
+        </View>
+
         {/* GIG CONTACT / PROMOTER */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Gig contact</Text>
@@ -125,7 +157,7 @@ export default function EventDetail() {
         </View>
 
         {/* GROUP */}
-        <View style={styles.section}>
+        {/* <View style={styles.section}>
           <Text style={styles.sectionTitle}>Group</Text>
           <View style={styles.groupRow}>
             <Text style={styles.groupName}>{groupName}</Text>
@@ -133,18 +165,7 @@ export default function EventDetail() {
               <Text style={styles.followText}>Follow</Text>
             </Pressable>
           </View>
-        </View>
-
-        {/* GIG TYPE / TAGS */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Gig details</Text>
-          <Text style={styles.muted}>See if this gig fits you. Categories help promoters find the right talent.</Text>
-          <View style={styles.chips}>
-            {['Wrestler', 'Audition', 'Paid', 'Beginner friendly'].map((t) => (
-              <View key={t} style={styles.chip}><Text style={styles.chipText}>{t}</Text></View>
-            ))}
-          </View>
-        </View>
+        </View> */}
 
         {/* PRICE + CTA */}
         <View style={styles.bottomPad} />

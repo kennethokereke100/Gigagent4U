@@ -1,5 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
+import { doc, setDoc } from "firebase/firestore";
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated, Easing,
@@ -15,6 +17,9 @@ import {
   View, useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import ErrorOverlay from '../../components/ErrorOverlay';
+import { auth, db } from "../../firebaseConfig";
+import { getFriendlyErrorMessage } from '../../firebaseErrorMessages';
 
 const BG = '#F5F3F0';
 const CTA_SPACING = 12;
@@ -92,6 +97,7 @@ export default function RegisterScreen() {
   const [first, setFirst] = useState('');
   const [last, setLast] = useState('');
   const [pw, setPw] = useState('');
+  const [errors, setErrors] = useState<string[]>([]);
 
   const pwLen = pw.length;
 
@@ -121,6 +127,36 @@ export default function RegisterScreen() {
   const emailsMatch = email.trim() === email2.trim();
   const canSubmit = allFilled && emailsMatch && pwLen > 6;
 
+  const handleRegister = async () => {
+    if (!canSubmit) return;
+    setErrors([]);
+
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, pw);
+
+      await updateProfile(userCredential.user, {
+        displayName: `${first} ${last}`,
+      });
+
+      // Create Firestore user doc
+      await setDoc(doc(db, "users", userCredential.user.uid), {
+        email: userCredential.user.email,
+        displayName: `${first} ${last}`,
+        role: null, // will be set later in Questions.tsx
+        status: "online",
+        eventbriteConnected: false, // legacy field for compatibility
+        createdAt: new Date(),
+      });
+
+      console.log("✅ User registered and Firestore doc created:", userCredential.user.email);
+      router.replace("/screen/Questions"); // Go to onboarding questions
+    } catch (err: any) {
+      console.error("❌ Registration error:", err.message);
+      const msg = getFriendlyErrorMessage(err.code);
+      setErrors([msg]);
+    }
+  };
+
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <SafeAreaView style={styles.safe}>
@@ -138,6 +174,12 @@ export default function RegisterScreen() {
         >
           <View style={styles.form}>
             <Text style={styles.title}>Create an account</Text>
+
+            {/* ErrorOverlay shows above title */}
+            <ErrorOverlay
+              messages={errors}
+              onHide={() => setErrors([])}
+            />
 
             <FloatingInput placeholder="Email address" value={email} onChangeText={setEmail} keyboardType="email-address" />
             <FloatingInput placeholder="Confirm email address" value={email2} onChangeText={setEmail2} keyboardType="email-address" />
@@ -169,7 +211,7 @@ export default function RegisterScreen() {
         <Animated.View pointerEvents="box-none" style={[styles.ctaWrap, { paddingBottom: bottomOffset }]}>
           <Pressable
             disabled={!canSubmit}
-            onPress={() => router.push('/screen/Questions')}
+            onPress={handleRegister}
             style={({ pressed }) => [
               styles.cta,
               !canSubmit && styles.ctaDisabled,

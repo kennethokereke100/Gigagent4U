@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
@@ -16,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BottomPicker from '../../components/BottomPicker';
 import BottomSheetQuestion from '../../components/BottomSheetQuestion';
 import { useUserRole } from '../../contexts/UserRoleContext';
+import { auth, db } from "../../firebaseConfig";
 
 const BG = '#F5F3F0';
 const OTHER = 'Other';
@@ -282,11 +284,24 @@ export default function QuestionsScreen() {
 
             <Pressable
               disabled={!canContinue}
-              onPress={() => {
-                if (role) {
-                  setUserRole(role.toLowerCase() as 'talent' | 'promoter');
+              onPress={async () => {
+                if (!auth.currentUser) return;
+
+                try {
+                  await setDoc(doc(db, "users", auth.currentUser.uid), {
+                    role,
+                    categories,
+                    promoterType,
+                    createdAt: serverTimestamp(),
+                  }, { merge: true });
+
+                  if (role) {
+                    setUserRole(role.toLowerCase() as 'talent' | 'promoter');
+                  }
+                  router.push('/screen/Locationsearch');
+                } catch (err: any) {
+                  console.error("❌ Error saving role:", err.message);
                 }
-                router.push('/screen/Locationsearch');
               }}
               style={({ pressed }) => [
                 styles.cta,

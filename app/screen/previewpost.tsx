@@ -5,6 +5,7 @@ import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const BG = '#F5F3F0';
+const PLACEHOLDER_IMAGE = 'https://picsum.photos/seed/gigplaceholder/800/450';
 
 export default function PreviewPost() {
   const router = useRouter();
@@ -12,28 +13,32 @@ export default function PreviewPost() {
 
   // Get event data from navigation params
   const {
+    category = 'Event',
     title = 'Event Title',
     description = 'Event description',
     address = 'Event address',
     contactInfo = 'Contact info',
-    gigGroupName = 'Group name',
+    // gigGroupName = 'Group name',
     hourlyAmount = '$0',
     startDate = '',
     endDate = '',
     time = '',
     photoUri = '',
+    coverImage = '',
     location = '',
   } = useLocalSearchParams<{
+    category?: string;
     title?: string;
     description?: string;
     address?: string;
     contactInfo?: string;
-    gigGroupName?: string;
+    // gigGroupName?: string;
     hourlyAmount?: string;
     startDate?: string;
     endDate?: string;
     time?: string;
     photoUri?: string;
+    coverImage?: string;
     location?: string;
   }>();
 
@@ -42,24 +47,43 @@ export default function PreviewPost() {
     router.push({
       pathname: '/screen/eventdetailpreview',
       params: {
+        category,
         title,
         description,
         address,
         contactInfo,
-        gigGroupName,
+        // gigGroupName,
         hourlyAmount,
         startDate,
         endDate,
         time,
         photoUri,
+        coverImage,
         location,
       }
     });
   };
 
   const handleEdit = () => {
-    // Return to create event with data preserved
-    router.back();
+    // Navigate to CreateEvent with prefilled data
+    router.push({
+      pathname: '/screen/CreateEvent',
+      params: {
+        category,
+        title,
+        description,
+        address,
+        contactInfo,
+        // gigGroupName,
+        hourlyAmount,
+        startDate,
+        endDate,
+        time,
+        photoUri,
+        coverImage,
+        location,
+      }
+    });
   };
 
   // Format date range and time
@@ -91,7 +115,7 @@ export default function PreviewPost() {
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={10}>
-          <Ionicons name="chevron-back" size={20} color="#111" />
+          <Ionicons name="close" size={20} color="#111" />
         </Pressable>
         <Text style={styles.headerTitle}>Preview Post</Text>
         <View style={{ width: 40 }} />
@@ -103,11 +127,7 @@ export default function PreviewPost() {
           {/* Cover Photo */}
           <View style={styles.photoContainer}>
             <Image
-              source={
-                photoUri
-                  ? { uri: String(photoUri) }
-                  : { uri: 'https://picsum.photos/seed/eventpreview/400/200' }
-              }
+              source={{ uri: coverImage || photoUri || PLACEHOLDER_IMAGE }}
               style={styles.coverPhoto}
               resizeMode="cover"
             />
@@ -117,7 +137,7 @@ export default function PreviewPost() {
                 <Text style={styles.tagText}>Posted</Text>
               </View>
               <View style={styles.tag}>
-                <Text style={styles.tagText}>Event</Text>
+                <Text style={styles.tagText}>{category}</Text>
               </View>
             </View>
           </View>
@@ -127,7 +147,8 @@ export default function PreviewPost() {
             <Text style={styles.cardTitle}>{title}</Text>
             <Text style={styles.cardDateTime}>{formatDateTime()}</Text>
             <Text style={styles.cardVenue}>{resolveVenue()}</Text>
-            <Text style={styles.cardDistance}>1.2 miles away</Text>
+            <Text style={styles.cardPrice}>Gig Price: {hourlyAmount}</Text>
+            <Text style={styles.cardDescription} numberOfLines={3}>{description}</Text>
           </View>
         </View>
       </View>
@@ -136,7 +157,7 @@ export default function PreviewPost() {
       <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
         <View style={styles.footerContent}>
           <Pressable style={styles.primaryButton} onPress={handleNext}>
-            <Text style={styles.primaryButtonText}>Next</Text>
+            <Text style={styles.primaryButtonText}>Preview Event Details</Text>
           </Pressable>
           <Pressable style={styles.secondaryButton} onPress={handleEdit}>
             <Text style={styles.secondaryButtonText}>Edit Post</Text>
@@ -234,9 +255,16 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginBottom: 4,
   },
-  cardDistance: {
+  cardPrice: {
     fontSize: 14,
     color: '#6B7280',
+    marginBottom: 8,
+    fontWeight: '600',
+  },
+  cardDescription: {
+    fontSize: 14,
+    color: '#6B7280',
+    lineHeight: 20,
   },
   footer: {
     position: 'absolute',
