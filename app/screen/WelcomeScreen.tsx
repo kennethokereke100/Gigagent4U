@@ -2,7 +2,7 @@
 import { AntDesign, FontAwesome, Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React from "react";
-import { Pressable, SafeAreaView, StatusBar, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, SafeAreaView, StatusBar, StyleSheet, Text, View } from "react-native";
 
 export default function welcomescreen() {
   const router = useRouter();
@@ -25,7 +25,11 @@ export default function welcomescreen() {
         <Text style={styles.title}>Welcome to Gigagent4u</Text>
 
         <View style={styles.illustration}>
-          <Text style={styles.illustrationText}>Illustration</Text>
+          <Image 
+            source={require('../../assets/images/GA4U.png')} 
+            style={styles.logoImage}
+            resizeMode="contain"
+          />
         </View>
 
         <View style={styles.buttons}>
@@ -84,14 +88,16 @@ const styles = StyleSheet.create({
   illustration: {
     marginTop: 24,
     height: 220,
-    borderRadius: 20,
-    backgroundColor: "#E8E6E2",
     alignItems: "center",
     justifyContent: "center"
   },
   illustrationText: {
     color: "#7A7A7A",
     fontSize: 14
+  },
+  logoImage: {
+    width: 320,
+    height: 320,
   },
   buttons: {
     marginTop: 16,
