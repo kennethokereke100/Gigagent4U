@@ -3,12 +3,12 @@ import { useRouter } from 'expo-router';
 import { collection, doc, onSnapshot, orderBy, query, where, writeBatch } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import ConfettiCannon from 'react-native-confetti-cannon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { auth, db } from '../../../firebaseConfig';
+import { Notification, NotificationType } from '../../../types/notifications';
 
 const BG = '#F5F3F0';
-
-type NotificationType = 'gig_invite' | 'message' | 'first_post';
 
 type NotificationItem = {
   id: string;
@@ -23,23 +23,16 @@ type NotificationItem = {
   createdAt: any; // Firestore Timestamp
 };
 
-type FirestoreNotification = {
-  userId: string;
-  message: string;
-  cta?: string;
-  createdAt: any;
-  read: boolean;
-};
-
 export default function NotificationsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showConfetti, setShowConfetti] = useState(false);
 
   // Convert Firestore notification to UI notification
   const convertFirestoreToNotification = (doc: any): NotificationItem => {
-    const data = doc.data();
+    const data = doc.data() as Notification;
     const createdAt = data.createdAt?.toDate?.() || new Date();
     const now = new Date();
     const diffMs = now.getTime() - createdAt.getTime();
@@ -53,16 +46,27 @@ export default function NotificationsScreen() {
     else if (diffHours < 24) timeString = `${diffHours}h`;
     else timeString = `${diffDays}d`;
 
-    // Determine notification type and icon based on message content
-    let type: NotificationType = 'message';
+    // Use the type from the notification data, with fallback based on message content
+    let type: NotificationType = data.type || 'message';
     let icon = 'chatbubble-outline';
     
-    if (data.message.includes('first event') || data.message.includes('Congratulations')) {
-      type = 'first_post';
-      icon = 'trophy-outline';
-    } else if (data.message.includes('invited') || data.message.includes('gig')) {
-      type = 'gig_invite';
-      icon = 'calendar-outline';
+    // Set icon based on notification type
+    switch (type) {
+      case 'first_post':
+        icon = 'trophy-outline';
+        break;
+      case 'gig_invite':
+        icon = 'calendar-outline';
+        break;
+      case 'message':
+        icon = 'chatbubble-outline';
+        break;
+      case 'application_confirmation':
+        icon = 'checkmark-circle-outline';
+        break;
+      case 'new_application':
+        icon = 'person-add-outline';
+        break;
     }
 
     return {
@@ -111,11 +115,22 @@ export default function NotificationsScreen() {
     return () => unsubscribe();
   }, []);
 
-  // Mark all notifications as read when screen is visited
+  // Mark all notifications as read when screen is visited and trigger confetti for first post
   useEffect(() => {
     if (notifications.length > 0 && auth.currentUser) {
       const unreadNotifications = notifications.filter(n => !n.read);
       if (unreadNotifications.length > 0) {
+        // Check if there's an unread first_post notification with congratulations message
+        const hasFirstPostNotification = unreadNotifications.some(n => 
+          n.type === 'first_post' && n.title.includes('Congratulations on your first event')
+        );
+        
+        if (hasFirstPostNotification) {
+          // Trigger confetti animation for first post notification
+          setShowConfetti(true);
+          setTimeout(() => setShowConfetti(false), 3000);
+        }
+        
         markAllAsRead();
       }
     }
@@ -147,8 +162,16 @@ export default function NotificationsScreen() {
         router.push('/screen/eventlist?activeTab=gigs');
         break;
       case 'message':
-        // Navigate to message with fromScreen parameter
-        router.push(`/screen/Message?fromScreen=notifications&name=${encodeURIComponent('King Slaine (Promoter)')}&initials=KS`);
+        // Navigate to message with conversation ID
+        const conversationId = (notification as any).conversationId;
+        if (conversationId) {
+          router.push(`/screen/Message?fromScreen=notifications&conversationId=${conversationId}`);
+        } else {
+          router.push('/screen/Message?fromScreen=notifications');
+        }
+        break;
+      case 'first_post':
+        // For first post notification, no special action needed
         break;
     }
   };
@@ -161,11 +184,24 @@ export default function NotificationsScreen() {
         router.push('/screen/eventlist?activeTab=gigs');
         break;
       case 'message':
-        // Navigate to message with fromScreen parameter
-        router.push(`/screen/Message?fromScreen=notifications&name=${encodeURIComponent('King Slaine (Promoter)')}&initials=KS`);
+        // Navigate to message with conversation ID
+        const ctaConversationId = (notification as any).conversationId;
+        if (ctaConversationId) {
+          router.push(`/screen/Message?fromScreen=notifications&conversationId=${ctaConversationId}`);
+        } else {
+          router.push('/screen/Message?fromScreen=notifications');
+        }
         break;
       case 'first_post':
         // For first post notification, navigate to gigs tab
+        router.push('/screen/eventlist?activeTab=gigs');
+        break;
+      case 'application_confirmation':
+        // Navigate to message screen
+        router.push('/screen/Message');
+        break;
+      case 'new_application':
+        // Navigate to gig screen with candidates tab active
         router.push('/screen/eventlist?activeTab=gigs');
         break;
       default:
@@ -203,6 +239,16 @@ export default function NotificationsScreen() {
       accessibilityRole="none"
       accessibilityLabel="Notifications screen"
     >
+      {/* Confetti Animation for First Post Notification */}
+      {showConfetti && (
+        <ConfettiCannon
+          count={200}
+          origin={{ x: -10, y: 0 }}
+          fadeOut={true}
+          autoStart={true}
+          colors={['#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7']}
+        />
+      )}
       <ScrollView
         contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 96 }}
         showsVerticalScrollIndicator={false}
@@ -233,7 +279,11 @@ export default function NotificationsScreen() {
           </View>
         ) : (
           notifications.map((notification) => (
-          <View key={notification.id} style={styles.card}>
+          <Pressable 
+            key={notification.id} 
+            style={styles.card}
+            onPress={() => handleNotificationPress(notification)}
+          >
             <View style={styles.cardLeft}>
               <View 
                 style={styles.emojiBadge}
@@ -291,7 +341,7 @@ export default function NotificationsScreen() {
                 </Pressable>
               )}
             </View>
-          </View>
+          </Pressable>
           ))
         )}
       </ScrollView>

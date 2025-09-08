@@ -32,7 +32,7 @@ export default function EventList() {
     }
   }, [activeTab]);
 
-  // Listen for unread notifications
+  // Listen for unread notifications (first_post and application notifications)
   useEffect(() => {
     if (!auth.currentUser) {
       setUnreadCount(0);
@@ -42,12 +42,12 @@ export default function EventList() {
     const notificationsQuery = query(
       collection(db, 'notifications'),
       where('userId', '==', auth.currentUser.uid),
-      where('read', '==', false)
+      where('read', '==', false),
+      where('type', 'in', ['first_post', 'application_confirmation', 'new_application', 'message'])
     );
 
     const unsubscribe = onSnapshot(notificationsQuery, (snapshot) => {
       setUnreadCount(snapshot.docs.length);
-      console.log('📱 Unread notifications count:', snapshot.docs.length);
     }, (error) => {
       console.error('❌ Error listening to unread notifications:', error);
       setUnreadCount(0);
@@ -89,8 +89,13 @@ export default function EventList() {
     showBadge?: boolean;
   }) => {
     const active = tab === k;
+    
+    const handlePress = () => {
+      setTab(k);
+    };
+    
     return (
-      <Pressable onPress={() => setTab(k)} style={styles.navItem} hitSlop={10}>
+      <Pressable onPress={handlePress} style={styles.navItem} hitSlop={10}>
         <View style={styles.iconWrapper}>
           <Ionicons name={active ? icon[0] : icon[1]} size={24} color={active ? '#111' : '#9CA3AF'} />
           {showBadge && unreadCount > 0 && (
@@ -109,6 +114,8 @@ export default function EventList() {
   return (
     <View style={styles.container}>
       <StatusBar style="dark" backgroundColor="transparent" translucent />
+      
+      
       {/* Content container with no top padding to ensure status bar overlap */}
       <View style={styles.contentContainer}>{renderScreen()}</View>
 
@@ -163,15 +170,22 @@ const styles = StyleSheet.create({
   },
   badge: {
     position: 'absolute',
-    top: -4,
-    right: -4,
-    backgroundColor: 'red',
+    top: -6,
+    right: -8,
+    backgroundColor: '#FF3B30', // iOS red color
     borderRadius: 10,
     minWidth: 20,
     height: 20,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: '#fff', // White border to make it stand out
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 3,
   },
   badgeText: {
     color: 'white',

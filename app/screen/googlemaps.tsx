@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { addDoc, collection } from 'firebase/firestore';
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import React, { useState } from 'react';
 import {
     Alert,
@@ -17,6 +17,7 @@ import DateRangePicker from '../../components/DateRangePicker';
 import GigHourlySheet from '../../components/GigHourlySheet';
 import TimePicker from '../../components/TimePicker';
 import { auth, db } from '../../firebaseConfig';
+import { validateGoogleEventData } from '../../utils/ensureGoogleEventFields';
 
 const TALENT_CATEGORIES = [
   'UFC Athlete',
@@ -79,8 +80,18 @@ export default function GoogleMaps() {
         return;
       }
 
-      // Build event object
-      const eventData = {
+      // Build event object with all required fields for Firestore security rules
+      const rawEventData = {
+        // Required fields for Firestore security rules
+        title: eventTitle.trim(),
+        venue: params.venueName || 'Unknown Venue',
+        dateLine: `${startDate.trim()} • ${time.trim()}`,
+        createdBy: user.uid,        // MUST be included for security rules
+        userId: user.uid,           // alias for promoter ID
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        
+        // Additional event data
         eventTitle: eventTitle.trim(),
         venueName: params.venueName || 'Unknown Venue',
         venueAddress: params.venueAddress || 'Unknown Address',
@@ -91,9 +102,10 @@ export default function GoogleMaps() {
         time: time.trim(),
         gigPrice: parseFloat(hourlyAmount) || 0,
         category: selectedCategory,
-        createdBy: user.uid,
-        createdAt: new Date(),
       };
+
+      // Validate and ensure all required fields are present
+      const eventData = validateGoogleEventData(rawEventData);
 
       // Save to Firestore in googleevents collection
       await addDoc(collection(db, "googleevents"), eventData);

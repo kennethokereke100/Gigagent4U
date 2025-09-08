@@ -43,6 +43,7 @@ export default function RootLayout() {
             <Stack.Screen name="screen/profile" options={{ title: 'Profile' }} />
             <Stack.Screen name="screen/gigagent/editprofile" options={{ title: 'Edit Profile' }} />
             <Stack.Screen name="screen/books" options={{ title: 'Books' }} />
+            <Stack.Screen name="screen/map" options={{ title: 'Map' }} />
           </Stack>
         </UserLocationProvider>
       </UserRoleProvider>

@@ -1,8 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { doc, getDoc } from 'firebase/firestore';
+import React, { useEffect, useState } from 'react';
+import { Alert, Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useUserRole } from '../../contexts/UserRoleContext';
+import { auth, db } from '../../firebaseConfig';
+import { createApplicationNotification } from '../../utils/createApplicationNotification';
 
 const BG = '#F5F3F0';
 const PLACEHOLDER_IMAGE = 'https://picsum.photos/seed/gigplaceholder/800/450';
@@ -10,6 +15,11 @@ const PLACEHOLDER_IMAGE = 'https://picsum.photos/seed/gigplaceholder/800/450';
 export default function EventDetail() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { role } = useUserRole();
+  
+  const [eventData, setEventData] = useState<any>(null);
+  const [promoterProfile, setPromoterProfile] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
   // Params passed from list item; provide sensible fallbacks
   const {
@@ -34,6 +44,8 @@ export default function EventDetail() {
     photoUri,
     photoUrl,
     location,
+    userId, // Promoter's user ID
+    eventId, // Event ID for applying
   } = useLocalSearchParams<{
     title?: string;
     dateLine?: string;
@@ -56,7 +68,206 @@ export default function EventDetail() {
     photoUri?: string;
     photoUrl?: string;
     location?: string;
+    userId?: string;
+    eventId?: string;
   }>();
+
+  // Fetch event data and promoter profile
+  useEffect(() => {
+    const fetchEventAndPromoterData = async () => {
+      console.log('🔍 Fetching event data for eventId:', eventId);
+      
+      if (!eventId) {
+        console.log('⚠️ No eventId provided, using fallback data');
+        setLoading(false);
+        return;
+      }
+
+      try {
+        // 1. Fetch event document from Firestore
+        const eventRef = doc(db, 'posts', eventId);
+        const eventSnap = await getDoc(eventRef);
+        
+        if (eventSnap.exists()) {
+          const eventDocData = eventSnap.data();
+          console.log('✅ Event document found:', eventDocData);
+          setEventData(eventDocData);
+          
+          // 2. Fetch promoter profile using userId from event document
+          const promoterUserId = eventDocData.userId;
+          console.log('🔍 Fetching promoter profile for userId:', promoterUserId);
+          
+          if (promoterUserId) {
+            const profileRef = doc(db, 'profiles', promoterUserId);
+            const profileSnap = await getDoc(profileRef);
+            
+            if (profileSnap.exists()) {
+              const profileData = profileSnap.data();
+              console.log('✅ Promoter profile found:', profileData);
+              setPromoterProfile(profileData);
+            } else {
+              console.log('⚠️ Promoter profile not found in Firestore for userId:', promoterUserId);
+              console.log('📋 Will show fallback data instead');
+            }
+          }
+        } else {
+          console.log('⚠️ Event document not found in Firestore');
+        }
+      } catch (error) {
+        console.error('❌ Error fetching event and promoter data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchEventAndPromoterData();
+  }, [eventId]);
+
+  // Handler functions
+  const handlePromoterAvatarPress = () => {
+    const promoterUserId = eventData?.userId || userId;
+    if (promoterUserId) {
+      router.push({
+        pathname: '/screen/savedprofile',
+        params: { userId: promoterUserId }
+      });
+    }
+  };
+
+  const handleViewPromoterDetails = () => {
+    const promoterUserId = eventData?.userId || userId;
+    const promoterName = promoterProfile?.name || promoterProfile?.nickname || promoterName;
+    const eventTitle = eventData?.title || title;
+    
+    if (promoterUserId) {
+      router.push({
+        pathname: '/screen/savedprofile',
+        params: { 
+          promoterId: promoterUserId,
+          promoterName: promoterName,
+          eventId: eventId,
+          eventTitle: eventTitle
+        }
+      });
+    }
+  };
+
+  const handleCall = () => {
+    console.log('📞 Call button pressed!');
+    const phoneNumber = promoterProfile?.contact;
+    const promoterName = promoterProfile?.name || promoterProfile?.nickname || 'the promoter';
+    console.log('📱 Phone number:', phoneNumber);
+    console.log('👤 Promoter profile:', promoterProfile);
+    
+    if (!phoneNumber) {
+      console.log('❌ No phone number available');
+      Alert.alert('Error', 'No phone number available for this promoter');
+      return;
+    }
+
+    Alert.alert(
+      'Call Promoter',
+      `You are calling ${promoterName}. Call or Cancel.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Call',
+          onPress: async () => {
+            try {
+              const phoneUrl = `tel:${phoneNumber}`;
+              const canOpen = await Linking.canOpenURL(phoneUrl);
+              
+              if (canOpen) {
+                await Linking.openURL(phoneUrl);
+              } else {
+                // Fallback: copy to clipboard
+                await Clipboard.setStringAsync(phoneNumber);
+                Alert.alert('Phone number copied to clipboard', phoneNumber);
+              }
+            } catch (error) {
+              console.error('Error opening phone app:', error);
+              // Fallback: copy to clipboard
+              await Clipboard.setStringAsync(phoneNumber);
+              Alert.alert('Phone number copied to clipboard', phoneNumber);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleMessage = () => {
+    console.log('💬 Message button pressed!');
+    const promoterUserId = eventData?.userId || userId;
+    const promoterName = promoterProfile?.name || promoterProfile?.nickname || 'Promoter';
+    
+    router.push({
+      pathname: '/screen/Message',
+      params: {
+        promoterId: promoterUserId,
+        promoterName: promoterName,
+        fromScreen: 'gigs' // This tells Message.tsx to navigate back to gig list with bottom nav
+      }
+    });
+  };
+
+  const handleApply = async () => {
+    console.log('🎯 Apply button pressed!');
+    const promoterUserId = eventData?.userId || userId;
+    console.log('📊 Current state:', { role, eventId, promoterUserId, currentUser: auth.currentUser?.uid });
+    
+    if (role !== 'talent') {
+      console.log('❌ User is not a talent, role:', role);
+      Alert.alert('Error', 'Only talent users can apply to gigs');
+      return;
+    }
+
+    if (!eventId || !promoterUserId) {
+      console.log('❌ Missing required data:', { eventId, promoterUserId });
+      Alert.alert('Error', 'Event or promoter information not found');
+      return;
+    }
+
+    if (!auth.currentUser) {
+      console.log('❌ User not authenticated');
+      Alert.alert('Error', 'You must be logged in to apply');
+      return;
+    }
+
+    try {
+      console.log('🔄 Getting talent profile...');
+      // Get talent name from profile
+      const talentProfileRef = doc(db, 'profiles', auth.currentUser.uid);
+      const talentProfileSnap = await getDoc(talentProfileRef);
+      const talentName = talentProfileSnap.exists() ? talentProfileSnap.data().name : 'Unknown Talent';
+      console.log('👤 Talent name:', talentName);
+
+      console.log('🔄 Creating application and notifications...');
+      // Create application and notifications
+      await createApplicationNotification(
+        eventId,
+        promoterUserId, // promoter user ID from event data
+        auth.currentUser.uid, // talent user ID
+        talentName,
+        String(eventData?.title || title)
+      );
+
+      console.log('✅ Application created successfully!');
+      Alert.alert(
+        'Success!',
+        'Your application has been submitted successfully. You will be notified when the promoter responds.',
+        [
+          {
+            text: 'OK',
+            onPress: () => router.back()
+          }
+        ]
+      );
+    } catch (error) {
+      console.error('❌ Error applying to gig:', error);
+      Alert.alert('Error', 'Failed to apply to gig. Please try again.');
+    }
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: BG }}>
@@ -136,24 +347,58 @@ export default function EventDetail() {
         {/* GIG CONTACT / PROMOTER */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Gig contact</Text>
-          <View style={styles.promoterCard}>
-            <Image
-              source={{ uri: 'https://i.pravatar.cc/84' }}
-              style={styles.avatar}
-            />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.promoterName}>{promoterName}</Text>
-              <Text style={styles.muted}>{promoterRole}</Text>
+          
+          {/* Show real promoter data if available */}
+          {promoterProfile ? (
+            <>
+              <Pressable style={styles.promoterCard} onPress={handlePromoterAvatarPress}>
+                <Image
+                  source={{ uri: promoterProfile.photoUrl || 'https://i.pravatar.cc/84' }}
+                  style={styles.avatar}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.promoterName}>
+                    {promoterProfile.name || promoterProfile.nickname || 'Unknown Promoter'}
+                  </Text>
+                  <Text style={styles.muted}>
+                    {promoterProfile.role || 'Promoter'}
+                  </Text>
+                </View>
+                <Pressable style={styles.ghostIcon} hitSlop={10} onPress={handleMessage}>
+                  <Ionicons name="chatbubbles-outline" size={18} color="#111" />
+                  <Text style={styles.ghostLabel}>Chat</Text>
+                </Pressable>
+              </Pressable>
+              <View style={styles.rowButtons}>
+                <Secondary onPress={handleCall} label="Call" icon="call-outline" />
+                <Secondary onPress={handleMessage} label="Message" icon="paper-plane-outline" />
+              </View>
+              <Pressable style={styles.viewDetailsButton} onPress={handleViewPromoterDetails}>
+                <Text style={styles.viewDetailsText}>View Promoter Details</Text>
+                <Ionicons name="chevron-forward" size={16} color="#6B7280" />
+              </Pressable>
+            </>
+          ) : (
+            /* Show fallback for Google events or when no promoter data */
+            <View style={styles.promoterCard}>
+              <Image
+                source={{ uri: 'https://i.pravatar.cc/84' }}
+                style={styles.avatar}
+              />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.promoterName}>
+                  {promoterName || 'Contact TBD'}
+                </Text>
+                <Text style={styles.muted}>
+                  {promoterRole || 'Event Organizer'}
+                </Text>
+              </View>
+              <View style={styles.ghostIcon}>
+                <Ionicons name="information-circle-outline" size={18} color="#6B7280" />
+                <Text style={[styles.ghostLabel, { color: '#6B7280' }]}>Info</Text>
+              </View>
             </View>
-            <Pressable style={styles.ghostIcon} hitSlop={10} onPress={() => { /* TODO: open chat */ }}>
-              <Ionicons name="chatbubbles-outline" size={18} color="#111" />
-              <Text style={styles.ghostLabel}>Chat</Text>
-            </Pressable>
-          </View>
-          <View style={styles.rowButtons}>
-            <Secondary onPress={() => { /* TODO: call promoter */ }} label="Call" icon="call-outline" />
-            <Secondary onPress={() => { /* TODO: message promoter */ }} label="Message" icon="paper-plane-outline" />
-          </View>
+          )}
         </View>
 
         {/* GROUP */}
@@ -177,9 +422,11 @@ export default function EventDetail() {
           <Text style={styles.priceTop}>{priceText}</Text>
           <Text style={styles.mutedSmall}>All fees included</Text>
         </View>
-        <Pressable style={styles.cta} onPress={() => {/* TODO: apply / reserve flow */}}>
-          <Text style={styles.ctaText}>Apply</Text>
-        </Pressable>
+        {role === 'talent' && (
+          <Pressable style={styles.cta} onPress={handleApply}>
+            <Text style={styles.ctaText}>Apply</Text>
+          </Pressable>
+        )}
       </View>
     </View>
   );
@@ -232,6 +479,21 @@ const styles = StyleSheet.create({
   rowText: { fontSize: 15, color: '#111', flex: 1, lineHeight: 20 },
 
   rowButtons: { flexDirection: 'row', gap: 10, marginTop: 8 },
+  viewDetailsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    gap: 8,
+  },
+  viewDetailsText: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
   secondaryBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: '#E5E7EB', backgroundColor: '#fff'

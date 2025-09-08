@@ -1,15 +1,17 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useMemo } from 'react';
+import { collection, getDoc, onSnapshot, orderBy, query, where } from 'firebase/firestore';
+import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
-  View,
+  View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { auth, db } from '../../firebaseConfig';
 
 const GROUPED = '#F2F2F7';
 const CARD = '#FFFFFF';
@@ -25,21 +27,102 @@ type Thread = {
   preview: string;
   time: string;
   unread?: boolean;
+  otherUserId: string; // The other participant's user ID
+  conversationId: string;
 };
 
-const MOCK: Thread[] = [
-  { id: '1', name: 'Julian Smith', initials: 'JS', preview: 'Hi!', time: '4:05 PM', unread: true },
-  { id: '2', name: 'Maya Johnson', initials: 'MJ', preview: 'Attachment: 1 Video', time: '4:00 PM' },
-  { id: '3', name: 'King Slaine (Promoter)', initials: 'KS', preview: 'Invite: Friday showcase', time: '2:18 PM' },
-];
+interface Conversation {
+  id: string;
+  members: string[];
+  lastMessage: string;
+  lastMessageAt: any;
+  createdAt: any;
+}
 
 export default function PrivateMessages() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const data = useMemo(() => MOCK, []);
+  const [conversations, setConversations] = useState<Thread[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const onOpenThread = (t: { name: string; initials: string }) => {
-    router.push(`/screen/Message?fromScreen=privatemessages&name=${encodeURIComponent(t.name)}&initials=${t.initials}`);
+  // Fetch conversations for the current user
+  useEffect(() => {
+    if (!auth.currentUser) {
+      setLoading(false);
+      return;
+    }
+
+    console.log('🔄 Fetching conversations for user:', auth.currentUser.uid);
+
+    const conversationsQuery = query(
+      collection(db, 'conversations'),
+      where('members', 'array-contains', auth.currentUser.uid),
+      orderBy('lastMessageAt', 'desc')
+    );
+
+    const unsubscribe = onSnapshot(conversationsQuery, async (snapshot) => {
+      console.log('📨 Received conversations snapshot:', snapshot.docs.length);
+      
+      const conversationThreads: Thread[] = [];
+      
+      for (const doc of snapshot.docs) {
+        const conversationData = doc.data() as Conversation;
+        
+        // Find the other user ID (not the current user)
+        const otherUserId = conversationData.members.find(uid => uid !== auth.currentUser?.uid);
+        
+        if (otherUserId) {
+          try {
+            // Fetch the other user's profile to get their name
+            const profileRef = doc(db, 'profiles', otherUserId);
+            const profileSnap = await getDoc(profileRef);
+            
+            let name = 'Unknown User';
+            if (profileSnap.exists()) {
+              const profileData = profileSnap.data() as any;
+              name = profileData?.name || profileData?.nickname || 'Unknown User';
+            }
+            
+            // Format the time
+            const time = formatMessageTime(conversationData.lastMessageAt);
+            
+            conversationThreads.push({
+              id: doc.id,
+              name: name,
+              initials: getInitials(name),
+              preview: conversationData.lastMessage || 'No messages yet',
+              time: time,
+              unread: false, // TODO: Implement unread logic
+              otherUserId: otherUserId,
+              conversationId: doc.id
+            });
+          } catch (error) {
+            console.error('❌ Error fetching profile for user:', otherUserId, error);
+          }
+        }
+      }
+      
+      setConversations(conversationThreads);
+      setLoading(false);
+      console.log('✅ Conversations loaded:', conversationThreads.length);
+    }, (error) => {
+      console.error('❌ Error listening to conversations:', error);
+      setLoading(false);
+    });
+
+    return unsubscribe;
+  }, []);
+
+  const onOpenThread = (thread: Thread) => {
+    console.log('💬 Opening conversation with:', thread.name);
+    router.push({
+      pathname: '/screen/Message',
+      params: {
+        fromScreen: 'privatemessages',
+        promoterId: thread.otherUserId,
+        promoterName: thread.name
+      }
+    });
   };
 
   const onCompose = () => {
@@ -53,7 +136,7 @@ export default function PrivateMessages() {
 
   const renderItem = ({ item }: { item: Thread }) => (
     <Pressable
-      onPress={() => onOpenThread?.(item)}
+      onPress={() => onOpenThread(item)}
       style={styles.row}
       android_ripple={{ color: '#00000010' }}
     >
@@ -83,13 +166,13 @@ export default function PrivateMessages() {
         {/* Row 1: left/right actions (kept away from the bottom edge) */}
         <View style={styles.controlsRow}>
           <Pressable
-            onPress={Platform.OS === 'ios' ? undefined : onBack}
+            onPress={onBack}
             hitSlop={12}
             accessibilityRole="button"
-            accessibilityLabel={Platform.OS === 'ios' ? 'Edit' : 'Back'}
+            accessibilityLabel="Back"
             style={styles.actionBtn}
           >
-            <Text style={styles.actionText}>{Platform.OS === 'ios' ? 'Edit' : 'Back'}</Text>
+            <Text style={styles.actionText}>Back</Text>
           </Pressable>
 
           <Pressable
@@ -112,14 +195,27 @@ export default function PrivateMessages() {
       </View>
 
       {/* ===== List ===== */}
-      <FlatList
-        data={data}
-        keyExtractor={(i) => i.id}
-        renderItem={renderItem}
-        ItemSeparatorComponent={() => <View style={styles.sep} />}
-        style={{ flex: 1, backgroundColor: CARD }}
-        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 16) }}
-      />
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={IOS_BLUE} />
+          <Text style={styles.loadingText}>Loading conversations...</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={conversations}
+          keyExtractor={(i) => i.id}
+          renderItem={renderItem}
+          ItemSeparatorComponent={() => <View style={styles.sep} />}
+          style={{ flex: 1, backgroundColor: CARD }}
+          contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 16) }}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>No conversations yet</Text>
+              <Text style={styles.emptySubtext}>Start a conversation by messaging someone</Text>
+            </View>
+          }
+        />
+      )}
     </View>
   );
 }
@@ -184,4 +280,80 @@ const styles = StyleSheet.create({
   right: { alignItems: 'flex-end', justifyContent: 'center', width: 70, gap: 6 },
   time: { fontSize: 13, color: MUTED },
   sep: { height: StyleSheet.hairlineWidth, backgroundColor: '#E9E9EB', marginLeft: 76 },
+  
+  // Loading and empty states
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: CARD,
+    gap: 16,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: MUTED,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+    gap: 8,
+  },
+  emptyText: {
+    fontSize: 18,
+    color: TEXT,
+    fontWeight: '600',
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: MUTED,
+    textAlign: 'center',
+  },
 });
+
+// Utility functions
+function getInitials(name: string): string {
+  return name
+    .split(' ')
+    .map(word => word.charAt(0))
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
+}
+
+function formatMessageTime(timestamp: any): string {
+  if (!timestamp) return '';
+  
+  try {
+    let date: Date;
+    
+    // Handle Firestore Timestamp
+    if (timestamp.toDate) {
+      date = timestamp.toDate();
+    } else if (timestamp.seconds) {
+      date = new Date(timestamp.seconds * 1000);
+    } else if (typeof timestamp === 'number') {
+      date = new Date(timestamp);
+    } else {
+      date = new Date(timestamp);
+    }
+    
+    const now = new Date();
+    const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
+    
+    if (diffInHours < 24) {
+      // Show time for today
+      return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    } else if (diffInHours < 168) { // 7 days
+      // Show day of week
+      return date.toLocaleDateString([], { weekday: 'short' });
+    } else {
+      // Show date
+      return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    }
+  } catch (error) {
+    console.error('❌ Error formatting time:', error);
+    return '';
+  }
+}

@@ -1,18 +1,27 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { doc, getDoc } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-    FlatList,
-    Keyboard,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  FlatList,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { auth, db } from '../../firebaseConfig';
+import {
+  createMessageNotification,
+  getMessagesForConversation,
+  MessageData,
+  sendMessage,
+  setupConversation
+} from '../../utils/messageUtils';
 
 const BG = '#F5F3F0';
 const CARD = '#FFFFFF';
@@ -21,39 +30,31 @@ const BORDER = '#E5E7EB';
 const MUTED = '#6B7280';
 const IOS_BLUE = '#0A84FF';
 
-type Msg = { id: string; from: 'me' | 'them'; text: string };
 
 const TOPBAR_H = 56;
 const AV = 48;
 
-export default function Message({
-  name = 'King Slaine (Promoter)',
-  initials = 'KS',
-}: {
-  name?: string;
-  initials?: string;
-}) {
+export default function Message() {
   const insets = useSafeAreaInsets();
   const navigation = useRouter();
   
-  // Get navigation parameters to determine where user came from
-  const { fromScreen, name: paramName, initials: paramInitials } = useLocalSearchParams<{
+  // Get navigation parameters
+  const { 
+    fromScreen, 
+    promoterId, 
+    promoterName: paramPromoterName 
+  } = useLocalSearchParams<{
     fromScreen?: string;
-    name?: string;
-    initials?: string;
+    promoterId?: string;
+    promoterName?: string;
   }>();
-
-  // Use parameters if provided, otherwise use props
-  const displayName = paramName ? decodeURIComponent(paramName) : name;
-  const displayInitials = paramInitials || initials;
 
   const [input, setInput] = useState('');
   const [keyboardShown, setKeyboardShown] = useState(false);
-  const [msgs, setMsgs] = useState<Msg[]>([
-    { id: '1', from: 'them', text: 'Hey Julian!' },
-    { id: '2', from: 'them', text: 'Long time no see' },
-    { id: '3', from: 'me', text: 'This is a test message' },
-  ]);
+  const [messages, setMessages] = useState<MessageData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [promoterProfile, setPromoterProfile] = useState<any>(null);
+  const [conversationId, setConversationId] = useState<string | null>(null);
 
   const listRef = useRef<FlatList>(null);
 
@@ -65,6 +66,62 @@ export default function Message({
       hide.remove();
     };
   }, []);
+
+  // Fetch promoter profile and set up conversation
+  useEffect(() => {
+    const setupChat = async () => {
+      if (!promoterId || !auth.currentUser) {
+        console.log('⚠️ Missing promoterId or user not authenticated');
+        console.log('⚠️ promoterId:', promoterId);
+        console.log('⚠️ auth.currentUser:', auth.currentUser?.uid);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        console.log('🔄 Setting up chat with promoter:', promoterId);
+        console.log('🔄 Current user:', auth.currentUser.uid);
+        
+        // Setup conversation first (this is the critical part)
+        const convId = await setupConversation(promoterId);
+        setConversationId(convId);
+        console.log('✅ Conversation setup complete:', convId);
+        
+        // Try to fetch promoter profile (optional, for display purposes)
+        try {
+          const promoterProfileRef = doc(db, 'profiles', promoterId);
+          const promoterProfileSnap = await getDoc(promoterProfileRef);
+          
+          if (promoterProfileSnap.exists()) {
+            const profileData = promoterProfileSnap.data();
+            setPromoterProfile(profileData);
+            console.log('✅ Promoter profile loaded:', profileData.name);
+          } else {
+            console.log('⚠️ Promoter profile not found, using fallback');
+            setPromoterProfile({ name: paramPromoterName || 'Promoter' });
+          }
+        } catch (profileError) {
+          console.log('⚠️ Could not fetch promoter profile, using fallback:', profileError);
+          setPromoterProfile({ name: paramPromoterName || 'Promoter' });
+        }
+        
+        // Set up real-time message listener
+        const unsubscribe = getMessagesForConversation(convId, (msgs) => {
+          console.log('📨 Received messages:', msgs.length);
+          setMessages(msgs);
+          setLoading(false);
+        });
+        
+        return unsubscribe;
+      } catch (error) {
+        console.error('❌ Error setting up chat:', error);
+        console.error('❌ Error details:', error);
+        setLoading(false);
+      }
+    };
+
+    setupChat();
+  }, [promoterId, paramPromoterName]);
 
   /**
    * Handle back button navigation based on where the user came from
@@ -82,7 +139,20 @@ export default function Message({
           navigation.push('/screen/Privatemessages');
           return;
         case 'gigs':
-          navigation.push('/screen/eventlist');
+          // Return to eventlist with gigs tab active to maintain bottom nav
+          navigation.push('/screen/eventlist?activeTab=gigs');
+          return;
+        case 'profile':
+          // Return to eventlist with profile tab active to maintain bottom nav
+          navigation.push('/screen/eventlist?activeTab=profile');
+          return;
+        case 'eventdetail':
+          // Return to the previous screen (eventdetail) using back navigation
+          navigation.back();
+          return;
+        case 'savedprofile':
+          // Return to the previous screen (savedprofile) using back navigation
+          navigation.back();
           return;
         default:
           // For any other fromScreen value, use back navigation
@@ -95,15 +165,45 @@ export default function Message({
     navigation.back();
   };
 
-  const send = () => {
-    if (!input.trim()) return;
-    setMsgs((m) => [...m, { id: String(Date.now()), from: 'me', text: input.trim() }]);
+  const send = async () => {
+    if (!input.trim() || !conversationId || !auth.currentUser) {
+      console.log('⚠️ Cannot send message: missing input, conversationId, or user');
+      return;
+    }
+    
+    const messageText = input.trim();
     setInput('');
-    requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
+    
+    try {
+      console.log('📤 Sending message:', messageText);
+      
+      // Send message to Firestore using the new simplified function
+      await sendMessage(conversationId, messageText);
+      
+      // Create notification for the receiver
+      const senderName = auth.currentUser.displayName || 'Unknown User';
+      await createMessageNotification(
+        promoterId || '',
+        senderName,
+        messageText,
+        conversationId
+      );
+      
+      console.log('✅ Message sent and notification created');
+      
+      // Scroll to bottom
+      requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
+    } catch (error) {
+      console.error('❌ Error sending message:', error);
+      // Restore input on error
+      setInput(messageText);
+    }
   };
 
-  const renderItem = ({ item }: { item: Msg }) => {
-    const mine = item.from === 'me';
+  const renderItem = ({ item }: { item: MessageData }) => {
+    const mine = item.senderId === auth.currentUser?.uid;
+    const displayName = promoterProfile?.name || paramPromoterName || 'Promoter';
+    
     return (
       <View 
         style={[styles.bubbleRow, mine ? { justifyContent: 'flex-end' } : null]}
@@ -144,10 +244,12 @@ export default function Message({
       {/* Recipient header (grey, centered) */}
       <View style={styles.recipientHeader}>
         <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{displayInitials}</Text>
+          <Text style={styles.avatarText}>
+            {promoterProfile?.name ? promoterProfile.name.charAt(0).toUpperCase() : 'P'}
+          </Text>
         </View>
         <Text style={styles.recipientName} numberOfLines={1}>
-          {displayName}
+          {promoterProfile?.name || paramPromoterName || 'Promoter'}
         </Text>
       </View>
 
@@ -156,12 +258,24 @@ export default function Message({
         ref={listRef}
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 12, paddingTop: 8 }}
-        data={msgs}
+        data={messages}
         keyExtractor={(m) => m.id}
         renderItem={renderItem}
         onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
         accessibilityRole="list"
         accessibilityLabel="Message conversation"
+        ListEmptyComponent={
+          loading ? (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 40 }}>
+              <Text style={{ color: '#6B7280', fontSize: 16 }}>Loading messages...</Text>
+            </View>
+          ) : (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 40 }}>
+              <Text style={{ color: '#6B7280', fontSize: 16 }}>No messages yet</Text>
+              <Text style={{ color: '#9CA3AF', fontSize: 14, marginTop: 4 }}>Start the conversation!</Text>
+            </View>
+          )
+        }
       />
 
       {/* Input pinned above keyboard with no extra gap */}

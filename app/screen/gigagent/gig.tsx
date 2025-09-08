@@ -4,7 +4,7 @@ import { createMaterialTopTabNavigator } from '@react-navigation/material-top-ta
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, onSnapshot, orderBy, query, Timestamp } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, onSnapshot, orderBy, query, Timestamp, where } from 'firebase/firestore';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
@@ -17,6 +17,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AddEventBottomSheet from '../../../components/AddEventBottomSheet';
 import FilterBottomSheet from '../../../components/FilterBottomSheet';
+import InviteTalentBottomSheet from '../../../components/InviteTalentBottomSheet';
 import PickLocationSheet from '../../../components/PickLocationSheet';
 import PillarChip from '../../../components/PillarChip';
 import { useUserRole } from '../../../contexts/UserRoleContext';
@@ -143,6 +144,9 @@ export default function Gig() {
   // Add Event Bottom Sheet state
   const [addEventSheetVisible, setAddEventSheetVisible] = useState(false);
   
+  // Invite Talent Bottom Sheet state
+  const [inviteTalentVisible, setInviteTalentVisible] = useState(false);
+  
   // The active, applied filters:
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   
@@ -260,24 +264,53 @@ export default function Gig() {
     })();
   }, []);
 
-  // Set up Firestore listener for posts and google events with auth check
+  // Set up Firestore listener for posts and google events with proper cleanup
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
-      if (!user) {
-        console.log("No user logged in, skipping Firestore query");
-        setFirestorePosts([]); // Clear posts when user logs out
-        return;
-      }
+    let unsubscribePosts: (() => void) | null = null;
+    let unsubscribeGoogleEvents: (() => void) | null = null;
+    let allPosts: EventItem[] = [];
+    let allGoogleEvents: EventItem[] = [];
 
-      console.log("User authenticated, setting up Firestore listeners");
+    // Function to merge and sort all events by creation time
+    const mergeAndSortAllEvents = () => {
+      const combinedEvents = [...allPosts, ...allGoogleEvents];
+      
+      // Sort by creation time (newest first)
+      combinedEvents.sort((a, b) => {
+        const timeA = a.createdAt?.toDate?.() || new Date(a.postedAt);
+        const timeB = b.createdAt?.toDate?.() || new Date(b.postedAt);
+        return timeB.getTime() - timeA.getTime();
+      });
+      
+      console.log('📊 Merged events:', {
+        totalPosts: allPosts.length,
+        totalGoogleEvents: allGoogleEvents.length,
+        combinedTotal: combinedEvents.length
+      });
+      setFirestorePosts(combinedEvents);
+    };
+
+    // Function to clean up all Firestore listeners
+    const cleanupListeners = () => {
+      console.log('🧹 Cleaning up Firestore listeners');
+      if (unsubscribePosts) {
+        unsubscribePosts();
+        unsubscribePosts = null;
+      }
+      if (unsubscribeGoogleEvents) {
+        unsubscribeGoogleEvents();
+        unsubscribeGoogleEvents = null;
+      }
+    };
+
+    // Function to set up Firestore listeners
+    const setupListeners = () => {
+      console.log('🔗 Setting up Firestore listeners for authenticated user');
       
       const postsQuery = query(collection(db, "posts"), orderBy("createdAt", "desc"));
       const googleEventsQuery = query(collection(db, "googleevents"), orderBy("createdAt", "desc"));
       
-      let allPosts: EventItem[] = [];
-      let allGoogleEvents: EventItem[] = [];
-      
-      const unsubscribePosts = onSnapshot(postsQuery, (snapshot) => {
+      unsubscribePosts = onSnapshot(postsQuery, (snapshot) => {
         try {
           allPosts = snapshot.docs.map(doc => convertFirestorePostToEventItem(doc));
           mergeAndSortAllEvents();
@@ -296,11 +329,9 @@ export default function Gig() {
         } else if (error.code === 'unauthenticated') {
           console.error('User not authenticated');
         }
-        
-        // Don't clear existing posts on error - keep them visible
       });
 
-      const unsubscribeGoogleEvents = onSnapshot(googleEventsQuery, (snapshot) => {
+      unsubscribeGoogleEvents = onSnapshot(googleEventsQuery, (snapshot) => {
         try {
           allGoogleEvents = snapshot.docs.map(doc => convertGoogleEventToEventItem(doc));
           mergeAndSortAllEvents();
@@ -311,29 +342,25 @@ export default function Gig() {
       }, (error) => {
         console.error('❌ Error listening to Google events:', error);
       });
+    };
 
-      // Function to merge and sort all events by creation time
-      const mergeAndSortAllEvents = () => {
-        const combinedEvents = [...allPosts, ...allGoogleEvents];
-        
-        // Sort by creation time (newest first)
-        combinedEvents.sort((a, b) => {
-          const timeA = a.createdAt?.toDate?.() || new Date(a.postedAt);
-          const timeB = b.createdAt?.toDate?.() || new Date(b.postedAt);
-          return timeB.getTime() - timeA.getTime();
-        });
-        
-        setFirestorePosts(combinedEvents);
-      };
+    // Set up auth state listener
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        console.log("🚪 No user logged in, cleaning up Firestore listeners");
+        cleanupListeners();
+        setFirestorePosts([]); // Clear posts when user logs out
+        return;
+      }
 
-      // Store unsubscribe functions to clean up when auth state changes
-      return () => {
-        unsubscribePosts();
-        unsubscribeGoogleEvents();
-      };
+      console.log("👤 User authenticated, setting up Firestore listeners");
+      setupListeners();
     });
 
+    // Cleanup function for component unmount
     return () => {
+      console.log('🧹 Component unmounting, cleaning up all listeners');
+      cleanupListeners();
       unsubscribeAuth();
     };
   }, []);
@@ -357,7 +384,31 @@ export default function Gig() {
   // Handle goal press
   const handleGoalPress = (goalId: string) => {
     console.log('Goal pressed:', goalId);
-    // TODO: Navigate to appropriate screen based on goalId
+    
+    switch (goalId) {
+      case 'profile':
+        router.push('/screen/gigagent/editprofile');
+        break;
+      case 'event':
+        if (role === 'promoter') {
+          router.push('/screen/CreateEvent');
+        }
+        break;
+      case 'invite':
+        // TODO: Navigate to invite talent screen when implemented
+        console.log('Invite talent feature not yet implemented');
+        break;
+      case 'skills':
+        // TODO: Navigate to skills screen when implemented
+        console.log('Skills feature not yet implemented');
+        break;
+      case 'apply':
+        // TODO: Navigate to apply to gigs screen when implemented
+        console.log('Apply to gigs feature not yet implemented');
+        break;
+      default:
+        console.log('Unknown goal:', goalId);
+    }
   };
 
   // Handle goals banner dismiss
@@ -375,40 +426,86 @@ export default function Gig() {
   /** -------------------------
    * Data filtering for tabs
    * ------------------------ */
-  // Helper function to parse date strings like "Jan 5th", "Dec 15th"
+  // Helper function to parse date strings like "January 15th 2024", "Jan 5th", or ISO dates
   const parseEventDate = (dateStr: string): Date => {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    
-    // Map month abbreviations to numbers
-    const monthMap: { [key: string]: number } = {
-      'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
-      'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
-    };
-    
-    // Extract month and day from "Jan 5th" format
-    const parts = dateStr.split(' ');
-    const month = monthMap[parts[0]];
-    const day = parseInt(parts[1].replace(/\D/g, '')); // Remove "th", "st", "nd", "rd"
-    
-    // Create date object - assume current year unless it's a past month
-    let year = currentYear;
-    const eventDate = new Date(year, month, day);
-    
-    // If the event date is in the future but the month is in the past, it's from last year
-    if (eventDate > now && month < now.getMonth()) {
-      year = currentYear - 1;
-      return new Date(year, month, day);
+    if (!dateStr || dateStr === 'Date TBD') {
+      return new Date(); // Return current date for invalid dates
     }
     
-    return eventDate;
+    // Try to parse as ISO date first (e.g., "2024-01-15")
+    if (dateStr.includes('-') && dateStr.length >= 8) {
+      const isoDate = new Date(dateStr);
+      if (!isNaN(isoDate.getTime())) {
+        return isoDate;
+      }
+    }
+    
+    // Try to parse full format like "January 15th 2024"
+    const fullMonthMatch = dateStr.match(/^(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d+)(?:st|nd|rd|th)?\s+(\d{4})$/);
+    if (fullMonthMatch) {
+      const [, monthName, day, year] = fullMonthMatch;
+      const monthMap: { [key: string]: number } = {
+        'January': 0, 'February': 1, 'March': 2, 'April': 3, 'May': 4, 'June': 5,
+        'July': 6, 'August': 7, 'September': 8, 'October': 9, 'November': 10, 'December': 11
+      };
+      const month = monthMap[monthName];
+      return new Date(parseInt(year), month, parseInt(day));
+    }
+    
+    // Try to parse abbreviated format like "Jan 5th"
+    const abbrevMonthMatch = dateStr.match(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d+)(?:st|nd|rd|th)?/);
+    if (abbrevMonthMatch) {
+      const [, monthAbbrev, day] = abbrevMonthMatch;
+      const monthMap: { [key: string]: number } = {
+        'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
+        'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
+      };
+      const month = monthMap[monthAbbrev];
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      
+      // Create date object - assume current year unless it's a past month
+      let year = currentYear;
+      const eventDate = new Date(year, month, parseInt(day));
+      
+      // If the event date is in the future but the month is in the past, it's from last year
+      if (eventDate > now && month < now.getMonth()) {
+        year = currentYear - 1;
+        return new Date(year, month, parseInt(day));
+      }
+      
+      return eventDate;
+    }
+    
+    // Fallback: try to parse as a general date string
+    const fallbackDate = new Date(dateStr);
+    if (!isNaN(fallbackDate.getTime())) {
+      return fallbackDate;
+    }
+    
+    // If all parsing fails, return current date
+    console.warn('⚠️ Could not parse date:', dateStr, 'using current date as fallback');
+    return new Date();
   };
 
   // Use Firestore posts for all users, with role-based filtering
   const upcomingEvents = firestorePosts.filter(event => {
     const eventDate = parseEventDate(event.date);
     const now = new Date();
-    return eventDate >= now;
+    const isUpcoming = eventDate >= now;
+    
+    // Debug logging for first few events
+    if (firestorePosts.indexOf(event) < 3) {
+      console.log('🔍 Event date parsing:', {
+        originalDate: event.date,
+        parsedDate: eventDate.toISOString(),
+        now: now.toISOString(),
+        isUpcoming,
+        title: event.title
+      });
+    }
+    
+    return isUpcoming;
   });
 
   const pastEvents = firestorePosts.filter(event => {
@@ -478,6 +575,8 @@ export default function Gig() {
           photoUrl: (item as any).photoUrl,
           contact: (item as any).contact,
           gigPrice: (item as any).gigPrice?.toString(),
+          // CRITICAL: Add eventId for Apply button functionality
+          eventId: item.id,
         }
       });
     };
@@ -577,6 +676,7 @@ export default function Gig() {
             <GoalsSection 
               onGoalPress={handleGoalPress} 
               onDismiss={handleGoalsBannerDismiss}
+              role={role || undefined}
             />
           </View>
         ) : null
@@ -623,6 +723,7 @@ export default function Gig() {
             <GoalsSection 
               onGoalPress={handleGoalPress} 
               onDismiss={handleGoalsBannerDismiss}
+              role={role || undefined}
             />
           </View>
         ) : null
@@ -669,6 +770,7 @@ export default function Gig() {
             <GoalsSection 
               onGoalPress={handleGoalPress} 
               onDismiss={handleGoalsBannerDismiss}
+              role={role || undefined}
             />
           </View>
         ) : null
@@ -706,6 +808,7 @@ export default function Gig() {
               <GoalsSection 
                 onGoalPress={handleGoalPress} 
                 onDismiss={handleGoalsBannerDismiss}
+                role={role || undefined}
               />
             </View>
           )}
@@ -734,6 +837,7 @@ export default function Gig() {
               <GoalsSection 
                 onGoalPress={handleGoalPress} 
                 onDismiss={handleGoalsBannerDismiss}
+                role={role || undefined}
               />
             </View>
           ) : null
@@ -742,25 +846,119 @@ export default function Gig() {
     );
   };
 
-  const CandidatesTabWithGoals = () => (
-    <View style={{ flex: 1 }}>
-      {!goalsBannerDismissed && (
-        <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16 }}>
-          <GoalsSection 
-            onGoalPress={handleGoalPress} 
-            onDismiss={handleGoalsBannerDismiss}
+  const CandidatesTabWithGoals = () => {
+    const [candidates, setCandidates] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    // Fetch candidates from Firestore
+    useEffect(() => {
+      if (!auth.currentUser || role !== 'promoter') {
+        setLoading(false);
+        return;
+      }
+
+      const fetchCandidates = async () => {
+        if (!auth.currentUser) {
+          setLoading(false);
+          return;
+        }
+
+        try {
+          // Get all events created by the current promoter
+          const postsQuery = query(
+            collection(db, "posts"),
+            where("userId", "==", auth.currentUser.uid)
+          );
+          
+          const postsSnapshot = await getDocs(postsQuery);
+          const allCandidates: any[] = [];
+
+          // For each event, get its candidates
+          for (const postDoc of postsSnapshot.docs) {
+            const candidatesQuery = query(
+              collection(db, "events", postDoc.id, "candidates")
+            );
+            const candidatesSnapshot = await getDocs(candidatesQuery);
+            
+            for (const candidateDoc of candidatesSnapshot.docs) {
+              const candidateData = candidateDoc.data();
+              
+              // Get talent profile
+              const profileRef = doc(db, 'profiles', candidateData.userId);
+              const profileSnap = await getDoc(profileRef);
+              
+              if (profileSnap.exists()) {
+                const profileData = profileSnap.data();
+                allCandidates.push({
+                  id: candidateDoc.id,
+                  name: profileData.name || 'Unknown Talent',
+                  avatar: profileData.photoUrl || 'https://i.pravatar.cc/150?img=1',
+                  categories: profileData.categories || [],
+                  appliedAt: candidateData.appliedAt,
+                  status: candidateData.status,
+                  eventId: postDoc.id,
+                  eventTitle: postDoc.data().title,
+                });
+              }
+            }
+          }
+
+          setCandidates(allCandidates);
+        } catch (error) {
+          console.error('Error fetching candidates:', error);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      fetchCandidates();
+    }, [auth.currentUser?.uid, role]);
+
+    return (
+      <View style={{ flex: 1, backgroundColor: BG }}>
+        {!goalsBannerDismissed && (
+          <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16 }}>
+            <GoalsSection 
+              onGoalPress={handleGoalPress} 
+              onDismiss={handleGoalsBannerDismiss}
+              role={role || undefined}
+            />
+          </View>
+        )}
+
+        {candidates.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Ionicons name="people-outline" size={48} color="#9CA3AF" />
+            <Text style={styles.emptyStateTitle}>No candidates yet</Text>
+            <Text style={styles.emptyStateSubtitle}>
+              Candidates will appear here when they apply to your events.
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            data={candidates}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <View style={styles.candidateCard}>
+                <Image source={{ uri: item.avatar }} style={styles.candidateAvatar} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.candidateName}>{item.name}</Text>
+                  <Text style={styles.candidateCategories}>
+                    {item.categories.join(', ')}
+                  </Text>
+                </View>
+                <Pressable style={styles.offerBtn}>
+                  <Text style={styles.offerText}>Send Invite</Text>
+                </Pressable>
+              </View>
+            )}
+            ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+            contentContainerStyle={{ padding: 16 }}
           />
-        </View>
-      )}
-      <View style={styles.emptyState}>
-        <Ionicons name="people-outline" size={48} color="#9CA3AF" />
-        <Text style={styles.emptyStateTitle}>No candidates yet</Text>
-        <Text style={styles.emptyStateSubtitle}>
-          Candidates will appear here when they apply to your events.
-        </Text>
+        )}
       </View>
-    </View>
-  );
+    );
+  };
 
   const PastEventsTabWithGoals = () => {
     const router = useRouter();
@@ -775,6 +973,7 @@ export default function Gig() {
               <GoalsSection 
                 onGoalPress={handleGoalPress} 
                 onDismiss={handleGoalsBannerDismiss}
+                role={role || undefined}
               />
             </View>
           )}
@@ -798,6 +997,7 @@ export default function Gig() {
               <GoalsSection 
                 onGoalPress={handleGoalPress} 
                 onDismiss={handleGoalsBannerDismiss}
+                role={role || undefined}
               />
             </View>
           )}
@@ -826,6 +1026,7 @@ export default function Gig() {
               <GoalsSection 
                 onGoalPress={handleGoalPress} 
                 onDismiss={handleGoalsBannerDismiss}
+                role={role || undefined}
               />
             </View>
           ) : null
@@ -853,7 +1054,7 @@ export default function Gig() {
 
         {/* Search */}
         <Pressable
-          onPress={() => setPickVisible(true)}
+          onPress={() => isPromoter ? setInviteTalentVisible(true) : setPickVisible(true)}
           style={styles.searchInput}
           accessibilityRole="button"
         >
@@ -940,6 +1141,12 @@ export default function Gig() {
         }}
         title="Choose your location"
         initial={city}
+      />
+
+      {/* Invite Talent Bottom Sheet */}
+      <InviteTalentBottomSheet
+        visible={inviteTalentVisible}
+        onClose={() => setInviteTalentVisible(false)}
       />
 
       {/* Filter sheet — use the DRAFT value, show LIVE result count, and apply/clear handlers */}
@@ -1157,5 +1364,42 @@ const styles = StyleSheet.create({
     zIndex: 1000,
   },
 
+  // Candidate card styles
+  candidateCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    padding: 12,
+  },
+  candidateAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    marginRight: 12,
+  },
+  candidateName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111',
+  },
+  candidateCategories: {
+    fontSize: 13,
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  offerBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#111',
+  },
+  offerText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
+  },
 
 });

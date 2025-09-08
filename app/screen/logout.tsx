@@ -1,14 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { signOut } from 'firebase/auth';
-import { doc, getFirestore, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc } from 'firebase/firestore';
 import React, { useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { auth } from '../../firebaseConfig';
+import { auth, db } from '../../firebaseConfig';
 
 const BG = '#F5F3F0';
-const db = getFirestore();
 
 export default function LogoutScreen() {
   const router = useRouter();
@@ -17,20 +16,47 @@ export default function LogoutScreen() {
   const handleLogout = async () => {
     try {
       const user = auth.currentUser;
+      console.log('🚪 Starting logout process for user:', user?.uid);
 
+      // Step 1: Update Firestore user document BEFORE signing out
+      // This ensures we have proper permissions to update the document
       if (user) {
-        // Update Firestore user document to offline
-        const userRef = doc(db, 'users', user.uid);
-        await updateDoc(userRef, { status: 'offline', lastSeen: new Date() });
+        try {
+          const userRef = doc(db, 'users', user.uid);
+          await updateDoc(userRef, { 
+            status: 'offline', 
+            lastSeen: new Date() 
+          });
+          console.log('✅ User status updated to offline');
+        } catch (firestoreError) {
+          // If Firestore update fails (e.g., user already signed out, race condition),
+          // log warning but don't break the logout process
+          console.warn('⚠️ Failed to update user status in Firestore:', firestoreError);
+        }
       }
 
-      // Sign out from Firebase Auth
+      // Step 2: Sign out from Firebase Auth
+      // This must happen AFTER Firestore update to maintain permissions
       await signOut(auth);
+      console.log('✅ User signed out successfully');
 
+      // Step 3: Wait a moment for auth state to propagate and listeners to cleanup
+      // This prevents race conditions where other screens might still try to access Firestore
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Step 4: Close modal and redirect to login
       setShowSheet(false);
+      console.log('🔄 Navigating to login screen');
       router.replace('/screen/Login');
     } catch (err) {
-      console.error('Logout error:', err);
+      console.error('❌ Logout error:', err);
+      // Even if logout fails, close the modal and try to redirect
+      setShowSheet(false);
+      try {
+        router.replace('/screen/Login');
+      } catch (navError) {
+        console.error('❌ Navigation error during logout:', navError);
+      }
     }
   };
 

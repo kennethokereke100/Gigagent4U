@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { addDoc, collection, getDocs, query, where } from 'firebase/firestore';
 import React, { useState } from 'react';
 import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { auth, db } from '../../firebaseConfig';
+import { useUserRole } from '../../contexts/UserRoleContext';
+import { auth } from '../../firebaseConfig';
+import { createFirstPostNotification } from '../../utils/createNotification';
 import { createPostInFirestore, PostData } from '../../utils/createPostInFirestore';
 
 const BG = '#F5F3F0';
@@ -13,6 +14,7 @@ const PLACEHOLDER_IMAGE = 'https://picsum.photos/seed/gigplaceholder/800/450';
 export default function EventDetailPreview() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { role } = useUserRole();
   const [isPosting, setIsPosting] = useState(false);
 
   // Get event data from navigation params
@@ -54,15 +56,18 @@ export default function EventDetailPreview() {
       // Create the post data object for Firestore
       const postData: PostData = {
         userId: auth.currentUser!.uid,
+        createdBy: auth.currentUser!.uid, // Required for Firestore rules
         type: "promoter",
         photoUrl: coverImage || photoUri || PLACEHOLDER_IMAGE,
         title: title.trim(),
         description: description.trim(),
         address: address.trim(),
+        city: location || 'Unknown', // Required for Firestore rules
         startDate: startDate || '',
         endDate: endDate || '',
         time: time || 'Time TBD',
-        contact: contactInfo.trim(),
+        category: category || 'Event', // Include the talent category selected by promoter
+        // contact: contactInfo.trim(), // REMOVED: Contact info comes from /profiles/{userId}
         gigPrice: parseFloat(hourlyAmount.replace(/[^0-9.]/g, '')) || 0,
       };
 
@@ -70,25 +75,9 @@ export default function EventDetailPreview() {
       const postId = await createPostInFirestore(postData);
       console.log('✅ Event posted successfully with ID:', postId);
 
-      // Check if this is the user's first post and send notification
+      // Create first post notification if applicable
       try {
-        const userPostsQuery = query(
-          collection(db, 'posts'),
-          where('userId', '==', auth.currentUser!.uid)
-        );
-        const userPostsSnapshot = await getDocs(userPostsQuery);
-        
-        // If this is the first post (only 1 document in the query result)
-        if (userPostsSnapshot.docs.length === 1) {
-          await addDoc(collection(db, 'notifications'), {
-            userId: auth.currentUser!.uid,
-            message: "Congratulations on your first event! Now invite a talent.",
-            cta: "Invite Talent",
-            createdAt: new Date(),
-            read: false,
-          });
-          console.log('🎉 First post notification sent!');
-        }
+        await createFirstPostNotification(auth.currentUser!.uid, role as 'talent' | 'promoter');
       } catch (notificationError) {
         console.error('❌ Error sending first post notification:', notificationError);
         // Don't fail the post if notification fails
